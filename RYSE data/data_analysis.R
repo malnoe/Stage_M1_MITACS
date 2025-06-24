@@ -29,7 +29,7 @@ library(tidymodels) # multiclass classification regression
 
 ## Import work ####
 setwd("~/Ecole/M1/Stage/Internship_repo/RYSE data")
-load("~/Ecole/M1/Stage/Internship_repo/RYSE data/.RData")
+load("~/Ecole/M1/Stage/Internship_repo/RYSE data/RYSE_data.RData")
 
 ## Import master dataset #####
 RYSE_master_dataset <- read_sav("RYSE_master_dataset_08082022.sav")
