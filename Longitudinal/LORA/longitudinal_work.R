@@ -3,18 +3,16 @@
 ## Packages ####
 library(ggplot2)
 library(dplyr)
-library(missForest)
-library(purrr)
 library(rjags)
 library(SSranef)
-
+library(tidyr)
 
 
 ## Import the data and the functions ####
-df <- readRDS("C:/Users/garan/Documents/Ecole/M1/Stage/Internship_repo/LORA/ds_forJan.rds")
-source("~/Ecole/M1/Stage/Internship_repo/LORA/utils.R")
+df <- readRDS("C:/Users/garan/Documents/Ecole/M1/Stage/Internship_repo/Longitudinal/LORA/ds_forJan.rds")
+source("~/Ecole/M1/Stage/Internship_repo/Longitudinal/LORA/utils.R")
 
-load("~/Ecole/M1/Stage/Internship_repo/LORA/longitudinal_work_data.RData")
+load("~/Ecole/M1/Stage/Internship_repo/Longitudinal/LORA/longitudinal_work_data.RData")
 
 ## Select, recode and sum variables and clean dataframe ####
   # Select relevant variables and lines and create the week variable
@@ -186,8 +184,8 @@ pct_PIP <- function(alpha_res,percentages){
   res <- data.frame(PIP=c(),pct_non_average=c(),pct_resilient=c(),pct_vulnerable=c())
   for(percentage in percentages){
     ranef_sum <- ranef_summary(alpha_res, ci = 0.95, digits = 2)
-    pct_resilient <- sum(ranef_sum$PIP>percentage&ranef_sum$Post.mean<0,na.rm=TRUE)/515*100
-    pct_vulnerable <- sum(ranef_sum$PIP>percentage&ranef_sum$Post.mean>0,na.rm=TRUE)/515*100
+    pct_resilient <- sum(ranef_sum$PIP>=percentage&ranef_sum$Post.mean<0,na.rm=TRUE)/515*100
+    pct_vulnerable <- sum(ranef_sum$PIP>=percentage&ranef_sum$Post.mean>0,na.rm=TRUE)/515*100
     res <- rbind(res,data.frame(PIP=c(percentage),pct_non_average=c(pct_resilient+pct_vulnerable),pct_resilient=c(pct_resilient),pct_vulnerable=c(pct_vulnerable)))
   }
   return(res)
@@ -198,6 +196,54 @@ pct_PIP_alpha_dh<- pct_PIP (alpha_dh,seq(from=0.5,to=1,by=0.05))
 View(pct_PIP_alpha_pss)
 View(pct_PIP_alpha_dh)
 
+# Repartition of PIP
+summary(ranef_summary(alpha_dh, ci = 0.95, digits = 2)$PIP)
+summary(ranef_summary(alpha_pss, ci = 0.95, digits = 2)$PIP)
+
+
+# Visualization 
+# PSS
+df_long <- pct_PIP_alpha_pss %>%
+  mutate(pct_average = 100 - pct_non_average) %>%
+  pivot_longer(cols = c(pct_resilient, pct_vulnerable, pct_average),
+               names_to = "group",
+               values_to = "percentage") %>%
+  mutate(group = dplyr::recode(group,
+                        "pct_resilient" = "Resilient",
+                        "pct_vulnerable" = "Vulnerable",
+                        "pct_average" = "Average"))
+
+ggplot(df_long, aes(x = PIP, y = percentage, color = group)) +
+  geom_line(linewidth = 1) +
+  geom_point() +
+  labs(title = "Group Proportions by PIP for GHQ~PSS",
+       x = "PIP",
+       y = "Percentage",
+       color = "Group") +
+  ylim(0, 100) +
+  theme_minimal()
+
+
+# DH
+df_long <- pct_PIP_alpha_dh %>%
+  mutate(pct_average = 100 - pct_non_average) %>%
+  pivot_longer(cols = c(pct_resilient, pct_vulnerable, pct_average),
+               names_to = "group",
+               values_to = "percentage") %>%
+  mutate(group =dplyr::recode(group,
+                        pct_resilient = "Resilient",
+                        pct_vulnerable = "Vulnerable",
+                        pct_average = "Average"))
+
+ggplot(df_long, aes(x = PIP, y = percentage, color = group)) +
+  geom_line(linewidth = 1) +
+  geom_point() +
+  labs(title = "Group Proportions by PIP for GHQ~DH",
+       x = "PIP",
+       y = "Percentage",
+       color = "Group") +
+  ylim(0, 100) +
+  theme_minimal()
 ## SaS : Intercept and slope -> beta ####
 ## Week but the spike and slab is only on the slope
 # GHQ~PSS

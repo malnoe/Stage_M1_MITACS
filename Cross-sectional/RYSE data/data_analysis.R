@@ -28,8 +28,8 @@ library(tidymodels) # multiclass classification regression
 
 
 ## Import work ####
-setwd("~/Ecole/M1/Stage/Internship_repo/RYSE data")
-load("~/Ecole/M1/Stage/Internship_repo/RYSE data/RYSE_data.RData")
+setwd("~/Ecole/M1/Stage/Internship_repo/Cross-sectional/RYSE data")
+load("~/Ecole/M1/Stage/Internship_repo/Cross-sectional/RYSE data/RYSE_data.RData")
 
 ## Import master dataset #####
 RYSE_master_dataset <- read_sav("RYSE_master_dataset_08082022.sav")
@@ -70,7 +70,7 @@ df_SA <- RYSE_master_dataset[RYSE_master_dataset$Country==2
 
 ### BDI-II Depression : SA and CA -> T1, T1A, T2
 # Values : 0 to 63
-bins_BDI_II <- c(0,14,20,26,64)
+bins_BDI_II <- c(0,14,20,29,64)
 #T1_BDI_II
 #T1a_BDI_II
 #T2_BDI_II
@@ -249,7 +249,7 @@ get_groups_raw_residuals <- function(residuals,is_resilience_positive=FALSE){
 }
 
 # Visualization function for raw residuals
-visualization_raw_residuals <- function(df, adversity, outcome, adjusted_lm, groups, main = "Groups using raw residuals") {
+visualization_raw_residuals <- function(df, adversity, outcome, adjusted_lm, groups, main = "Groups using naive method",xlab="",ylab="") {
   
   # Adjusted linear regression coefficient for the plot
   intercept <- coef(adjusted_lm)[1]
@@ -263,8 +263,8 @@ visualization_raw_residuals <- function(df, adversity, outcome, adjusted_lm, gro
     geom_point(shape=1,size=0.8) +
     geom_abline(intercept = intercept, slope = slope, color = "grey", linetype = "solid") +
     labs(
-      x = adversity,
-      y = outcome,
+      x = if(xlab==""){adversity}else{xlab},
+      y = if(xlab==""){outcome}else{ylab},
       title = main,
       color = "Group"
     ) +
@@ -327,7 +327,7 @@ get_groups_intervals <- function(actual, pred,is_resilience_positive=FALSE) {
 # Visualization function for intervals
 visualization_intervals <- function(df, adversity, outcome, adjusted_lm, preds, labels, 
                                                main = "Intervals", 
-                                               colors = c("#deebf7", "#9ecae1","skyblue2", "#6baed6", "#3182bd", "#08519c")) {
+                                               colors = c("#deebf7", "#9ecae1","skyblue2", "#6baed6", "#3182bd", "#08519c"),xlab="",ylab="") {
   # Coefficients of the linear regression
   intercept <- coef(adjusted_lm)[1]
   slope     <- coef(adjusted_lm)[2]
@@ -337,8 +337,8 @@ visualization_intervals <- function(df, adversity, outcome, adjusted_lm, preds, 
     geom_point(shape = 1, size = 0.8) +
     geom_abline(intercept = intercept, slope = slope, color = "grey", linetype = "solid") +
     labs(
-      x = adversity,
-      y = outcome,
+      x = if(xlab==""){adversity}else{xlab},
+      y = if(xlab==""){outcome}else{ylab},
       title = main,
       fill = "Interval"
     ) +
@@ -525,7 +525,7 @@ get_groups_sd <- function(df, residuals, bins, adversity_string, is_resilience_p
 }
 
 # Visualization function for the SD intervals
-visualization_sd_intervals <- function(df,adversity,outcome,adjusted_lm,bins,res,names_sd,main="SD Intervals"){
+visualization_sd_intervals <- function(df,adversity,outcome,adjusted_lm,bins,res,names_sd,main="SD Intervals",xlab="",ylab=""){
   # Adjusted linear model coefficients
   intercept <- coef(adjusted_lm)[1]
   slope     <- coef(adjusted_lm)[2]
@@ -535,8 +535,8 @@ visualization_sd_intervals <- function(df,adversity,outcome,adjusted_lm,bins,res
     geom_point(shape=1,size=0.8) +
     geom_abline(intercept = intercept, slope = slope, color = "grey", linetype = "solid") +
     labs(
-      x = adversity,
-      y = outcome,
+      x = if(xlab==""){adversity}else{xlab},
+      y = if(xlab==""){outcome}else{ylab},
       title = main,
       fill = "Interval"
     ) +
@@ -646,7 +646,7 @@ get_groups_kmeans <- function(df, residuals, is_resilience_positive, data_for_km
   return(groups)
 }
 
-visualization_groups <- function(df,adversity,outcome,adjusted_lm,groups,main="Clusturing results"){
+visualization_groups <- function(df,adversity,outcome,adjusted_lm,groups,main="Clusturing results",xlab="",ylab=""){
   # Adjusted linear regression coefficient for the plot
   intercept <- coef(adjusted_lm)[1]
   slope     <- coef(adjusted_lm)[2]
@@ -673,8 +673,8 @@ visualization_groups <- function(df,adversity,outcome,adjusted_lm,groups,main="C
     geom_point(shape=1,size=0.8) +
     geom_abline(intercept = intercept, slope = slope, color = "grey", linetype = "solid") +
     labs(
-      x = adversity,
-      y = outcome,
+      x = if(xlab==""){adversity}else{xlab},
+      y = if(xlab==""){outcome}else{ylab},
       title = main,
       color = "Group"
     ) +
@@ -1098,7 +1098,7 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,modificat
   df_result[["raw"]] <- groups_raw
   
   if(visualization){
-    print(visualization_raw_residuals(df,adversity_string,outcome_string,lm_adjusted,groups_raw))
+    print(visualization_raw_residuals(df,adversity_string,outcome_string,lm_adjusted,groups_raw,xlab="BDI-II score",ylab="Engagement"))
   }
   
   # Prediction and confidence intervals
@@ -1124,7 +1124,7 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,modificat
   }
   
   if(visualization){
-    print(visualization_intervals(df=df,adversity=adversity_string,outcome=outcome_string,adjusted_lm =lm_adjusted,preds_conf,names_conf,main="Confidence and prediction intervals"))
+    print(visualization_intervals(df=df,adversity=adversity_string,outcome=outcome_string,adjusted_lm =lm_adjusted,preds_conf,names_conf,main="Confidence and prediction intervals",xlab="BDI-II score",ylab="Engagement"))
   }
   
   
@@ -1172,9 +1172,9 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,modificat
     df_result[[names_cred[[i]]]] <- groups
   }
   
-  if(visualization){
-    print(visualization_intervals(df=df,adversity=adversity_string,outcome=outcome_string,adjusted_lm =lm_adjusted_cred,preds_cred,names_cred,main="Credibility intervals"))
-  }
+  #if(visualization){
+  #  print(visualization_intervals(df=df,adversity=adversity_string,outcome=outcome_string,adjusted_lm =lm_adjusted_cred,preds_cred,names_cred,main="Credibility intervals",xlab="BDI-II score",ylab="Engagement"))
+  #}
   
   # Standard deviation
   list_sd_multiplicator <- list(2,1,0.5)
@@ -1188,7 +1188,7 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,modificat
     df_result[[names_sd[[i]]]] <- groups
   }
   if(visualization){
-    print(visualization_sd_intervals(df,adversity=adversity_string,outcome=outcome_string,adjusted_lm=lm_adjusted,bins=bins,res=res_sd,names_sd=names_sd,main="SD Intervals"))
+    print(visualization_sd_intervals(df,adversity=adversity_string,outcome=outcome_string,adjusted_lm=lm_adjusted,bins=bins,res=res_sd,names_sd=names_sd,main="SD Intervals",xlab="BDI-II score",ylab="Engagement"))
   }
   
   # Kmeans (only residuals)
@@ -1197,7 +1197,7 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,modificat
                          data.frame(resilient = sum(groups_kmeans=="resilient", na.rm=TRUE), average = sum(groups_kmeans=="average", na.rm=TRUE), vulnerable = sum(groups_kmeans=="vulnerable", na.rm=TRUE), row.names=c("Kmeans")))
   df_result[["Kmeans"]] <- groups_kmeans
   if(visualization){
-    print(visualization_groups(df,adversity_string,outcome_string,lm_adjusted,groups_kmeans,main="Groups using k-means algorithm"))
+    print(visualization_groups(df,adversity_string,outcome_string,lm_adjusted,groups_kmeans,main="Groups using k-means algorithm",xlab="BDI-II score",ylab="Engagement"))
   }
   
   return(list(df_result=df_result,df_n_groups=df_n_groups))
@@ -1716,7 +1716,7 @@ df_SAr_wtWESSES <- df_SAr[explication_vars]
 df_SAr_wtWESSES <- as.data.frame(lapply(df_SAr_wtWESSES, function(x) as.numeric(as.character(x))))
 df_SAr_wtWESSES.mf <- missForest::missForest(xmis = df_SAr_wtWESSES)
 df_SAr[,explication_vars] <- df_SAr_wtWESSES.mf$ximp
-#visdat::vis_miss(df_SAr)
+visdat::vis_miss(df_SAr)
 
 # Creation of the engagement variable
 n <- nrow(df_SAr)
@@ -1815,7 +1815,7 @@ adversity_string <- "T1_BDI_II"
 outcome_string <- "T1_Engagement"
 outcome <- df$T1_Engagement
 bins <- bins_BDI_II
-res <- adjusted_fit(df_SAr,adversity="T1_BDI_II",outcome="T1_Engagement",main="Adjusted and unadjusted linear regression of Engagement (work/school) with BDI-II score",xlab="BDI-II score",ylab="Engagement")
+res <- adjusted_fit(df_SAr,adversity="T1_BDI_II",outcome="T1_Engagement",main="Adjusted and unadjusted linear regression of Engagement (work or school) with BDI-II score",xlab="BDI-II score",ylab="Engagement")
 lm_adjusted <- res$lm_adjusted
 lm_adjusted_cred <- res$lm_adjusted_cred
 residuals <- res$residuals_adjusted
@@ -1908,7 +1908,7 @@ ggplot(df_long, aes(x = support_average, y = value, color = metric)) +
 
 
 
-# Function to modify the residuals depending on the group
+## Function to modify the residuals depending on the group ####
 transformed_residuals <- function(df_result,group_name,method="nothing"){
   res <- c()
   for(i in 1:nrow(df_result)){
@@ -1954,7 +1954,7 @@ transformed_residuals <- function(df_result,group_name,method="nothing"){
   return(res)
 }
 
-# Function for regression trees
+## Function for regression trees ####
 regression_tree <- function(df,df_result,list_group_names,predictors=explication_vars,method="nothing"){
   set.seed(1) # For reproductibility
   res <- data.frame()
