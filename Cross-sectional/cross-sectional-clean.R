@@ -12,6 +12,8 @@ library(rstanarm) # bayesian lm
 
 ## Set-up ####
 setwd("~/Ecole/M1/Stage/Internship_repo/Cross-sectional/RYSE data")
+load("~/Ecole/M1/Stage/Internship_repo/Cross-sectional/clean_rdata.RData")
+
 RYSE_master_dataset <- read_sav("RYSE_master_dataset_08082022.sav")
 df_CA <- RYSE_master_dataset[RYSE_master_dataset$Country==1,]
 df_SA <- RYSE_master_dataset[RYSE_master_dataset$Country==2 
@@ -572,23 +574,24 @@ visualization_groups <- function(df,adversity,outcome,adjusted_lm,groups,main="C
 # Function to get a dataframe with all of the grouping methods result and the dataframe with the sizes of each group for each method
 get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualization=TRUE){
   
-  outcome <- df[[outcome_string]]
-  adversity <- df[[adversity_string]]
+ 
   
-  # Initialize the result data_frames : one with the grouping for each person and each method and one with the number of people in each group for each method
-  df_n_groups <- data.frame(resilient=c(),average=c(),vulnerable=c())
-  df_result <- data.frame(residuals=res$residuals_adjusted,adversity=adversity)
-  
-  # Get the info
+  # Get the info about the lm
   lm_adjusted <- res$lm_adjusted
   lm_adjusted_cred <- res$lm_adjusted_cred
-  plot <- res$plot
   resilience_sign <- lm_adjusted$coefficients[2]<0
-  residuals <- res$residuals_adjusted
   data_training <- res$lm_adjusted$model
   
+  # Initialize the result data_frames : one with the grouping for each person and each method and one with the number of people in each group for each method
+  outcome <- df[[outcome_string]]
+  adversity <- df[[adversity_string]]
+  residuals_new_data <- outcome - (lm_adjusted$coefficients[[1]] + adversity * lm_adjusted$coefficients[[2]])
+  
+  df_n_groups <- data.frame(resilient=c(),average=c(),vulnerable=c())
+  df_result <- data.frame(residuals=residuals_new_data,adversity=adversity)
+  
   # Raw residuals
-  groups_raw <- get_groups_raw_residuals(residuals,is_resilience_positive=resilience_sign)
+  groups_raw <- get_groups_raw_residuals(residuals_new_data,is_resilience_positive=resilience_sign)
   df_n_groups <- rbind(df_n_groups,data.frame(resilient = sum(groups_raw=="resilient", na.rm=TRUE), average = sum(groups_raw=="average", na.rm=TRUE), vulnerable = sum(groups_raw=="vulnerable", na.rm=TRUE), row.names=c("raw")))
   df_result[["raw"]] <- groups_raw
   
@@ -664,7 +667,7 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
     "quantiles (35%)"
   )
   for(i in 1:length(list_quantile_sub)){
-    groups <- classification_quantiles(data_training = data_training,new_data = df,quantile_sub = list_quantile_sub[[i]],quantile_sup = list_quantile_sup[[i]],model = lm_adjusted,outcome_string,adversity_string)
+    groups <- classification_quantiles(data_training = data_training, new_data = df,quantile_sub = list_quantile_sub[[i]],quantile_sup = list_quantile_sup[[i]],model = lm_adjusted,outcome_string,adversity_string)
     df_n_groups <- rbind(df_n_groups,
                          data.frame(resilient = sum(groups=="resilient", na.rm=TRUE), average = sum(groups=="average", na.rm=TRUE), vulnerable = sum(groups=="vulnerable", na.rm=TRUE), row.names=c(names_quant[[i]])))
     df_result[[names_quant[[i]]]] <- groups
@@ -825,45 +828,33 @@ classification_metrics <- function(true_labels, predicted_labels) {
   return(results)
 }
 
-estimation_classification <- function(df,df_result,item_name,list_group_names,method="classification_tree",predictors=c("T1_Sex", "T1_Age", paste0("T1_CYRM_", 1:28))){
+estimation_classification <- function(df_train,df_test,adversity_string,outcome_string,bins,list_group_names,predictors=c("T1_Sex", "T1_Age", paste0("T1_CYRM_", 1:28))){
   set.seed(1) # For reproductibility
   res <- data.frame()
   
+  # Get the groupings for test and train
+  res_data_train <- adjusted_fit(df_train,adversity_string,outcome_string)
+  df_train_result <- get_all_groups(df_train, adversity_string, outcome_string,bins,res_data_train,visualization = FALSE)$df_result
+  df_test_result <- get_all_groups(df_test, adversity_string, outcome_string,bins,res_data_train,visualization = FALSE)$df_result
+
   for(i in 1:length(list_group_names)){
-    # Get the grouping
+    # Get the grouping method name
     group_name <- list_group_names[[i]]
     print(group_name)
     
-    # We get the groups for the chosen grouping for all 3 items
-    df[["groups"]] <- df_result[[group_name]]
-    y <- df[["groups"]]
-    X <- df[, predictors]
+    # We get the groups for the chosen grouping for test and train
+    df_train[["groups"]] <- df_train_result[[group_name]]
+    df_test[["groups"]] <- df_test_result[[group_name]]
     
-    # We choose the classification method and look at the results
-    if(method=="classification_tree"){
-      formula <- as.formula(paste("groups ~", paste(predictors, collapse = " + ")))
-      arbre <- rpart(formula, data = df, method = "class")
-      predictions <- predict(arbre, type = "class")
-    }
-    else if(method=="LDA"){
-      model_lda <- lda(X,y)
-      predictions <- predict(model_lda, X)$class
-    }
-    else if(method=="Naive_Bayes"){
-      formula <- as.formula(paste("groups ~", paste(predictors, collapse = " + ")))
-      model_nb <- naiveBayes(formula, data = df)
-      predictions <- predict(model_nb,newdata=df,type="class")
-    }
-    else if(method=="Logistic_Regression"){
-      df[["groups"]] <- factor(df[["groups"]], levels = c("resilient", "average", "vulnerable"))
-      formula <- as.formula(paste("groups ~", paste(predictors, collapse = " + ")))
-      model_fit <- multinom_reg() |> fit(formula, data = df)
-      preds <- model_fit |> augment(new_data = df)
-      predictions <- preds$.pred_class
-    }
+    # We build the classification tree from the train data
+    formula <- as.formula(paste("groups ~", paste(predictors, collapse = " + ")))
+    arbre <- rpart(formula, data = df_train, method = "class")
+    
+    # Get the prediction on the test data
+    predictions <- predict(arbre, newdata=df_test, type = "class")
     
     # Metrics
-    metrics <- classification_metrics(df[["groups"]],predictions)
+    metrics <- classification_metrics(df_test[["groups"]],predictions)
     null_model <- max(metrics$support[["average"]],metrics$support[["resilient"]],metrics$support[["vulnerable"]]) / (metrics$support[["resilient"]]+metrics$support[["average"]]+metrics$support[["vulnerable"]])
     
     res <- rbind(res, data.frame(
@@ -891,66 +882,8 @@ estimation_classification <- function(df,df_result,item_name,list_group_names,me
   return(res)
 }
 
-estimation_classification_tree_with_test <- function(df, df_result, item_name, list_group_names, n_perm = 100, predictors=c("T1_Sex", "T1_Age", paste0("T1_CYRM_", 1:28))) {
-  set.seed(2) # For reproducibility
-  res <- data.frame()
-  
-  for (i in seq_along(list_group_names)) {
-    group_name <- list_group_names[[i]]
-    cat("Processing:", group_name, "\n")
-    
-    df[["groups"]] <- df_result[[group_name]]
-    y <- df[["groups"]]
-    X <- df[, predictors]
-    
-    # Build and evaluate model on real data
-    formula <- as.formula(paste("groups ~", paste(predictors, collapse = " + ")))
-    arbre <- rpart(formula, data = df, method = "class")
-    predictions <- predict(arbre, type = "class")
-    
-    metrics <- classification_metrics(df[["groups"]], predictions)
-    acc_obs <- metrics$accuracy[[1]]
-    
-    # Permutation test
-    perm_accuracies <- numeric(n_perm)
-    for (j in 1:n_perm) {
-      df$groups_perm <- sample(df[["groups"]])  # shuffle labels
-      arbre_perm <- rpart(groups_perm ~ ., data = cbind(df[predictors], groups_perm = df$groups_perm), method = "class")
-      preds_perm <- predict(arbre_perm, type = "class")
-      perm_accuracies[j] <- mean(preds_perm == df$groups_perm)
-    }
-    p_value <- mean(perm_accuracies >= acc_obs)
-    
-    
-    null_model <- max(metrics$support[["average"]],metrics$support[["resilient"]],metrics$support[["vulnerable"]]) / sum(unlist(metrics$support))
-    
-    # Add the result to the global dataframe
-    res <- rbind(res, data.frame(
-      group_name = group_name,
-      accuracy = acc_obs,
-      null_model = null_model,
-      difference = acc_obs-null_model,
-      p_value_permutation = p_value,
-      macro_precision = metrics$macro_precision[[1]],
-      macro_recall = metrics$macro_recall[[1]],
-      macro_f1 = metrics$macro_f1[[1]],
-      precision_resilient = metrics$precision_per_class[["resilient"]],
-      recall_resilient = metrics$recall_per_class[["resilient"]],
-      f1score_resilient = metrics$f1_per_class[["resilient"]],
-      precision_average = metrics$precision_per_class[["average"]],
-      recall_average = metrics$recall_per_class[["average"]],
-      f1score_average = metrics$f1_per_class[["average"]],
-      precision_vulnerable = metrics$precision_per_class[["vulnerable"]],
-      recall_vulnerable = metrics$recall_per_class[["vulnerable"]],
-      f1score_vulnerable = metrics$f1_per_class[["vulnerable"]],
-      support_resilient = metrics$support[["resilient"]],
-      support_average = metrics$support[["average"]],
-      support_vulnerable = metrics$support[["vulnerable"]]
-    ))
-  }
-  return(res)
-}
-# Classification thing
+
+## Call of the classification ####
 groups_to_test <- list("quantiles (5%)",
                        "quantiles (10%)",
                        "quantiles (15%)",
@@ -974,16 +907,32 @@ groups_to_test <- list("quantiles (5%)",
                        "0.5SD",
                        "Kmeans")
 
-df_perf_classification_tree <- estimation_classification_tree_with_test(df,df_result_BDI_Engagement,"Engagement",groups_to_test,n_perm=5,predictors = explication_vars)
+# Reproductibility
+set.seed(1)
 
+#use 70% of dataset as training set and 30% as test set
+sample <- sample(c(TRUE, FALSE), nrow(df_SAr), replace=TRUE, prob=c(0.7,0.3))
+df_train <- df_SAr[sample, ]
+df_test <- df_SAr[!sample, ]
+
+df_perf_classification_tree1 <- estimation_classification(df_train,df_test,adversity_string,outcome_string,bins,groups_to_test)
+
+set.seed(42)
+
+#use 70% of dataset as training set and 30% as test set
+sample <- sample(c(TRUE, FALSE), nrow(df_SAr), replace=TRUE, prob=c(0.7,0.3))
+df_train <- df_SAr[sample, ]
+df_test <- df_SAr[!sample, ]
+
+df_perf_classification_tree42 <- estimation_classification(df_train,df_test,adversity_string,outcome_string,bins,groups_to_test)
 
 
 # Selection of the best grouping methods 
 # Criterias :
-# The average group size is at least 1/3 of the whole dataset -> >141
+# The average group size is at least 1/3 of the whole dataset -> >129/3=
 # The model as to predict (rightfully or wrongfully) resilience -> recall >0
 # We want good precision and in second a good recall for the resilient group.
-criteria_index <- df_perf_classification_tree$support_average>=141&df_perf_classification_tree$recall_resilient>0
+criteria_index <- df_perf_classification_tree42$support_average>=43&df_perf_classification_tree42$recall_resilient>0
 df_perf_class_comparison <- df_perf_classification_tree[criteria_index,]
 
 ggplot(df_perf_class_comparison,aes(x=1-recall_resilient,y=precision_resilient,label=group_name))+
@@ -1013,7 +962,7 @@ ggplot(df_long, aes(x = support_average, y = value, color = metric)) +
        y = "Performance",
        color = "Metrique",
        size=20) +
-  xlim(0, 423) +
+  xlim(0, 129) +
   ylim(0, 1) +
   theme_minimal()+
   theme(legend.text = element_text(size = 16),
