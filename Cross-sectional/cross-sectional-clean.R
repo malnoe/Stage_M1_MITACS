@@ -258,8 +258,6 @@ visualization_intervals <- function(df, adversity, outcome, adjusted_lm, preds, 
   # Combine all intervals parsed in the function
   all_preds <- do.call(rbind, lapply(seq_along(preds), function(i) {
     pred <- preds[[i]]
-    pred[[outcome]]   <- df[[outcome]]
-    pred[[adversity]] <- df[[adversity]]
     pred$label <- labels[i]
     pred
   }))
@@ -574,8 +572,6 @@ visualization_groups <- function(df,adversity,outcome,adjusted_lm,groups,main="C
 # Function to get a dataframe with all of the grouping methods result and the dataframe with the sizes of each group for each method
 get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualization=TRUE){
   
- 
-  
   # Get the info about the lm
   lm_adjusted <- res$lm_adjusted
   lm_adjusted_cred <- res$lm_adjusted_cred
@@ -622,19 +618,36 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
   }
   
   if(visualization){
+    # Create grid of adversity scores for smooth prediction
+    x_grid <- data.frame(adversity_var = seq(min(adversity, na.rm = TRUE),
+                                             max(adversity, na.rm = TRUE),
+                                             length.out = 200))
+    
+    # Rename column to match what the model expects
+    colnames(x_grid) <- adversity_string
+    
+    # Generate predictions over the grid
+    preds_conf2 <- list(
+      cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "prediction", level = 0.75))),
+      cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "prediction", level = 0.6))),
+      cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "prediction", level = 0.5))),
+      cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "confidence", level = 0.99))),
+      cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "confidence", level = 0.95)))
+    )
+    
     print(visualization_intervals(df=df,adversity=adversity_string,outcome=outcome_string,adjusted_lm =lm_adjusted,preds_conf,names_conf,main="Confidence and prediction intervals",xlab="BDI-II score",ylab="Engagement"))
   }
   
   
   # Credibility intervals
   preds_cred <- list(
-    get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.0005,upr=0.9995),
-    get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.005,upr=0.995),
-    get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.025,upr=0.975),
-    get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.05,upr=0.95),
-    get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.125,upr=0.875),
-    get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.25,upr=0.75)
-  )
+    cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.0005,upr=0.9995)),
+    cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.005,upr=0.995)),
+    cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.025,upr=0.975)),
+    cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.05,upr=0.95)),
+    cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.125,upr=0.875)),
+    cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.25,upr=0.75)),
+)
   names_cred <- list(
     "cred. 99.9%",
     "cred. 99%",
