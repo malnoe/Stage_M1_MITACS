@@ -3,6 +3,7 @@
 ## Packages ####
 library(dplyr) # dataframe managment
 library(ggplot2) # ploting
+library(tidyr) # dataframe management
 library(gridExtra) # plotinh
 library(haven) # read sav data
 library(missForest) # to impute data
@@ -619,8 +620,8 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
   
   if(visualization){
     # Create grid of adversity scores for smooth prediction
-    x_grid <- data.frame(adversity_var = seq(min(adversity, na.rm = TRUE),
-                                             max(adversity, na.rm = TRUE),
+    x_grid <- data.frame(adversity_var = seq(min(df[[adversity_string]], na.rm = TRUE),
+                                             max(df[[adversity_string]], na.rm = TRUE),
                                              length.out = 200))
     
     # Rename column to match what the model expects
@@ -628,25 +629,25 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
     
     # Generate predictions over the grid
     preds_conf2 <- list(
-      cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "prediction", level = 0.75))),
-      cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "prediction", level = 0.6))),
-      cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "prediction", level = 0.5))),
-      cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "confidence", level = 0.99))),
-      cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "confidence", level = 0.95)))
+      as.data.frame(cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "prediction", level = 0.75)))),
+      as.data.frame(cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "prediction", level = 0.6)))),
+      as.data.frame(cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "prediction", level = 0.5)))),
+      as.data.frame(cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "confidence", level = 0.99)))),
+      as.data.frame(cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "confidence", level = 0.95))))
     )
     
-    print(visualization_intervals(df=df,adversity=adversity_string,outcome=outcome_string,adjusted_lm =lm_adjusted,preds_conf,names_conf,main="Confidence and prediction intervals",xlab="BDI-II score",ylab="Engagement"))
+    print(visualization_intervals(df=df,adversity=adversity_string,outcome=outcome_string,adjusted_lm =lm_adjusted,preds_conf2,names_conf,main="Confidence and prediction intervals",xlab="BDI-II score",ylab="Engagement"))
   }
   
   
   # Credibility intervals
   preds_cred <- list(
-    cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.0005,upr=0.9995)),
-    cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.005,upr=0.995)),
-    cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.025,upr=0.975)),
-    cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.05,upr=0.95)),
-    cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.125,upr=0.875)),
-    cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.25,upr=0.75)),
+  as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.0005,upr=0.9995))),
+  as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.005,upr=0.995))),
+  as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.025,upr=0.975))),
+  as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.05,upr=0.95))),
+  as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.125,upr=0.875))),
+  as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.25,upr=0.75)))
 )
   names_cred <- list(
     "cred. 99.9%",
@@ -692,16 +693,16 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
   res_sd <- list()
   
   for(i in 1:length(list_sd_multiplicator)){
-    res_sd_i <- get_sd_in_bins(data_training,lm_adjusted,bins,outcome_string,adversity_string)
+    res_sd_i <- get_sd_in_bins(data_training,lm_adjusted,bins,list_sd_multiplicator[[i]],outcome_string,adversity_string)
     res_sd[[i]] <- res_sd_i
     groups <- classification_sd(df,bins,res_sd_i,lm_adjusted,outcome_string,adversity_string,list_sd_multiplicator[[i]])
     df_n_groups <- rbind(df_n_groups,
                          data.frame(resilient = sum(groups=="resilient", na.rm=TRUE), average = sum(groups=="average", na.rm=TRUE), vulnerable = sum(groups=="vulnerable", na.rm=TRUE), row.names=c(names_sd[[i]])))
     df_result[[names_sd[[i]]]] <- groups
   }
-  #if(visualization){
-  #  print(visualization_sd_intervals(df,adversity=adversity_string,outcome=outcome_string,adjusted_lm=lm_adjusted,bins=bins,res=res_sd,names_sd=names_sd,main="SD Intervals",xlab="BDI-II score",ylab="Engagement"))
-  #}
+  if(visualization){
+    print(visualization_sd_intervals(df,adversity=adversity_string,outcome=outcome_string,adjusted_lm=lm_adjusted,bins=bins,res=res_sd,names_sd=names_sd,main="SD Intervals",xlab="BDI-II score",ylab="Engagement"))
+  }
   
   # Kmeans (only residuals)
   res_kmeans <- res_kmeans(data_training,lm_adjusted)
@@ -939,6 +940,28 @@ df_test <- df_SAr[!sample, ]
 
 df_perf_classification_tree42 <- estimation_classification(df_train,df_test,adversity_string,outcome_string,bins,groups_to_test)
 
+#Visualization evolution of the null model and classifier accuracy as a function of the size of the average group
+df_long <- df_perf_classification_tree42 %>%
+  pivot_longer(cols = c(accuracy, null_model),
+               names_to = "metric",
+               values_to = "value") %>%
+  mutate(metric = dplyr::recode(metric,
+                                accuracy = "Accuracy du classifieur",
+                                null_model = "Accuracy du modèle nul"))
+
+ggplot(df_long, aes(x = support_average, y = value, color = metric)) +
+  geom_line(linewidth = 1) +
+  geom_point() +
+  labs(title = "Accuracy du modèle nul et du classifieur en fonction de la taille du groupe normal",
+       x = "Taille du groupe normal",
+       y = "Performance",
+       color = "Metrique",
+       size=20) +
+  xlim(0, 129) +
+  ylim(0, 1) +
+  theme_minimal()+
+  theme(legend.text = element_text(size = 16),
+        legend.title = element_text(size = 16))
 
 # Selection of the best grouping methods 
 # Criterias :
@@ -957,28 +980,5 @@ ggplot(df_perf_class_comparison,aes(x=1-recall_resilient,y=precision_resilient,l
        x="1- recall of the resilient group",
        y= "precision of the resilient group")+
   theme_minimal()
-
-# Visualization of the evolution of the accuracy and nul-model accuracy
-df_long <- df_perf_classification_tree %>%
-  pivot_longer(cols = c(accuracy, null_model),
-               names_to = "metric",
-               values_to = "value") %>%
-  mutate(metric = dplyr::recode(metric,
-                         accuracy = "Accuracy du classifieur",
-                         null_model = "Accuracy du modèle nul"))
-
-ggplot(df_long, aes(x = support_average, y = value, color = metric)) +
-  geom_line(linewidth = 1) +
-  geom_point() +
-  labs(title = "Accuracy du modèle nul et du classifieur en fonction de la taille du groupe normal",
-       x = "Taille du groupe normal",
-       y = "Performance",
-       color = "Metrique",
-       size=20) +
-  xlim(0, 129) +
-  ylim(0, 1) +
-  theme_minimal()+
-  theme(legend.text = element_text(size = 16),
-        legend.title = element_text(size = 16))
 
 
