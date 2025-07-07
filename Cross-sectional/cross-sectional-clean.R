@@ -75,16 +75,16 @@ adjusted_fit <- function(df,adversity,outcome,main="Adjusted and unadjusted line
   plot <- ggplot(df_plot, aes_string(x = adversity, y = outcome)) +
     
     # Influencers
-    geom_point(aes(shape = influencer), size = 2) +
+    geom_point(aes(shape = influencer), size = 3) +
     
     # Regression lines
     geom_abline(data = lines_df,
                 aes(intercept = intercept, slope = slope, color = model),
-                size = 0.8)+
+                size = 1)+
     
     # Legend
-    scale_color_manual(values = c("Unadjusted" = "deepskyblue3",
-                                  "Adjusted" = "aquamarine3"),
+    scale_color_manual(values = c("Unadjusted" = "deepskyblue4",
+                                  "Adjusted" = "aquamarine2"),
                        name="Model") +
     
     scale_shape_manual(values = c(`FALSE` = 1, `TRUE` = 16),
@@ -97,17 +97,17 @@ adjusted_fit <- function(df,adversity,outcome,main="Adjusted and unadjusted line
       y = ylab,
       title = main
     ) +
-    theme_minimal(base_size = 12) +
+    theme_minimal(base_size = 18) +
     theme(
-      plot.title = element_text(size = 10)
+      plot.title = element_text(size = 18)
     )
   
   # Resilient/Vulnerable anotations
   if(lines_df$slope[[1]] < 0){
-    plot <-plot + geom_text(x=max(na.omit(df[[adversity]]))-5,y=max(na.omit(df[[outcome]]))-5,label="Resilient",alpha=0.2,color="grey") + geom_text(x=min(na.omit(df[[adversity]]))+5,y=min(na.omit(df[[outcome]]))+5,label="Vulnerable",alpha=0.2,color="grey")
+    plot <-plot + geom_text(x=max(na.omit(df[[adversity]]))-5,y=max(na.omit(df[[outcome]]))-5,label="Resilient",alpha=0.2,color="grey",size=7) + geom_text(x=min(na.omit(df[[adversity]]))+5,y=min(na.omit(df[[outcome]]))+5,label="Vulnerable",alpha=0.2,color="grey",size=7)
   }
   else{
-    plot <- plot + geom_text(x=min(na.omit(df[[adversity]]))+5,y=max(na.omit(df[[outcome]]))-5,label="Vulnerable",alpha=0.2,color="grey") + geom_text(x=max(na.omit(df[[adversity]]))-5,y=min(na.omit(df[[outcome]]))+5,label="Resilient",alpha=0.2,color="grey")
+    plot <- plot + geom_text(x=min(na.omit(df[[adversity]]))+5,y=max(na.omit(df[[outcome]]))-5,label="Vulnerable",alpha=0.2,color="grey",size=7) + geom_text(x=max(na.omit(df[[adversity]]))-5,y=min(na.omit(df[[outcome]]))+5,label="Resilient",alpha=0.2,color="grey",size=7)
   }
   
   return(list(plot=plot,
@@ -153,24 +153,24 @@ visualization_raw_residuals <- function(df, adversity, outcome, adjusted_lm, gro
   
   # Viz
   plot <- ggplot(df, aes(x = .data[[adversity]], y = .data[[outcome]], color = group)) +
-    geom_point(shape=1,size=0.8) +
+    geom_point(shape=16,size=1.5) +
     geom_abline(intercept = intercept, slope = slope, color = "grey", linetype = "solid") +
     labs(
       x = if(xlab==""){adversity}else{xlab},
       y = if(xlab==""){outcome}else{ylab},
       title = main,
-      color = "Group"
+      color = "Group",
     ) +
-    theme_minimal(base_size = 10) +
-    theme(plot.title = element_text(size = 10))+
-    scale_color_manual(values=c("resilient"="skyblue","vulnerable"="coral","average"="grey"))
+    theme_minimal(base_size = 18) +
+    theme(plot.title = element_text(size = 18))+
+    scale_color_manual(values=c("resilient"="cadetblue4","vulnerable"="coral","average"="grey60"))
   
   # Add resilient and vulnerable text
   if(slope < 0){
-    plot <-plot + geom_text(x=max(na.omit(df[[adversity]]))-5,y=max(na.omit(df[[outcome]]))-5,label="Resilient",alpha=0.2,color="grey") + geom_text(x=min(na.omit(df[[adversity]]))+5,y=min(na.omit(df[[outcome]]))+5,label="Vulnerable",alpha=0.2,color="grey")
+    plot <-plot + geom_text(x=max(na.omit(df[[adversity]]))-5,y=max(na.omit(df[[outcome]]))-5,label="Resilient",alpha=0.2,color="grey",size=7) + geom_text(x=min(na.omit(df[[adversity]]))+5,y=min(na.omit(df[[outcome]]))+5,label="Vulnerable",alpha=0.2,color="grey",size=7)
   }
   else{
-    plot <- plot + geom_text(x=min(na.omit(df[[adversity]]))+5,y=max(na.omit(df[[outcome]]))-5,label="Vulnerable",alpha=0.2,color="grey") + geom_text(x=max(na.omit(df[[adversity]]))-5,y=min(na.omit(df[[outcome]]))+5,label="Resilient",alpha=0.2,color="grey")
+    plot <- plot + geom_text(x=min(na.omit(df[[adversity]]))+5,y=max(na.omit(df[[outcome]]))-5,label="Vulnerable",alpha=0.2,color="grey",size=7) + geom_text(x=max(na.omit(df[[adversity]]))-5,y=min(na.omit(df[[outcome]]))+5,label="Resilient",alpha=0.2,color="grey",size=7)
   }
   
   return(plot)
@@ -238,14 +238,14 @@ get_groups_intervals <- function(actual, pred, is_resilience_positive = FALSE) {
 
 visualization_intervals <- function(df, adversity, outcome, adjusted_lm, preds, labels, 
                                     main = "Intervals", 
-                                    colors = c("#deebf7", "#9ecae1","skyblue2", "#6baed6", "#3182bd", "#08519c"),xlab="",ylab="") {
+                                    colors = c("#deebf7", "#9ecae1","skyblue", "#6baed6", "#3182bd", "#08519c"),xlab="",ylab="") {
   # Coefficients of the linear regression
   intercept <- coef(adjusted_lm)[1]
   slope     <- coef(adjusted_lm)[2]
   
   # Base graph with points and linear regression 
   plot <- ggplot(df, aes(x = .data[[adversity]], y = .data[[outcome]])) +
-    geom_point(shape = 1, size = 0.8) +
+    geom_point(shape = 16, size = 1.5) +
     geom_abline(intercept = intercept, slope = slope, color = "grey", linetype = "solid") +
     labs(
       x = if(xlab==""){adversity}else{xlab},
@@ -253,8 +253,8 @@ visualization_intervals <- function(df, adversity, outcome, adjusted_lm, preds, 
       title = main,
       fill = "Interval"
     ) +
-    theme_minimal(base_size = 10) +
-    theme(plot.title = element_text(size = 10))
+    theme_minimal(base_size = 18) +
+    theme(plot.title = element_text(size = 18))
   
   # Combine all intervals parsed in the function
   all_preds <- do.call(rbind, lapply(seq_along(preds), function(i) {
@@ -285,18 +285,18 @@ visualization_intervals <- function(df, adversity, outcome, adjusted_lm, preds, 
     plot <- plot +
       geom_text(x = max(na.omit(df[[adversity]])) - 5,
                 y = max(na.omit(df[[outcome]])) - 5,
-                label = "Resilient", alpha = 0.2, color = "grey") +
+                label = "Resilient", alpha = 0.2, color = "grey",size=7) +
       geom_text(x = min(na.omit(df[[adversity]])) + 5,
                 y = min(na.omit(df[[outcome]])) + 5,
-                label = "Vulnerable", alpha = 0.2, color = "grey")
+                label = "Vulnerable", alpha = 0.2, color = "grey",size=7)
   } else {
     plot <- plot +
       geom_text(x = min(na.omit(df[[adversity]])) + 5,
                 y = max(na.omit(df[[outcome]])) - 5,
-                label = "Vulnerable", alpha = 0.2, color = "grey") +
+                label = "Vulnerable", alpha = 0.2, color = "grey",size=7) +
       geom_text(x = max(na.omit(df[[adversity]])) - 5,
                 y = min(na.omit(df[[outcome]])) + 5,
-                label = "Resilient", alpha = 0.2, color = "grey")
+                label = "Resilient", alpha = 0.2, color = "grey",size=7)
   }
   
   return(plot)
@@ -405,7 +405,7 @@ visualization_sd_intervals <- function(df,adversity,outcome,adjusted_lm,bins,res
   
   # Base graph with points and regression line
   plot <- ggplot(df, aes(x = .data[[adversity]], y = .data[[outcome]])) +
-    geom_point(shape=1,size=0.8) +
+    geom_point(shape=16,size=1.5) +
     geom_abline(intercept = intercept, slope = slope, color = "grey", linetype = "solid") +
     labs(
       x = if(xlab==""){adversity}else{xlab},
@@ -413,8 +413,8 @@ visualization_sd_intervals <- function(df,adversity,outcome,adjusted_lm,bins,res
       title = main,
       fill = "Interval"
     ) +
-    theme_minimal(base_size = 10) +
-    theme(plot.title = element_text(size = 10))
+    theme_minimal(base_size = 18) +
+    theme(plot.title = element_text(size = 18))
   
   # Color the area for each result
   all_polygons <- data.frame()
@@ -443,15 +443,15 @@ visualization_sd_intervals <- function(df,adversity,outcome,adjusted_lm,bins,res
   # Add polygons to the main plot
   plot <- plot +
     geom_polygon(data = all_polygons, aes(x = x, y = y, group = group, fill = fill_factor), alpha = 0.3, color = NA) +
-    scale_fill_manual(values = c("2SD" = "lightblue", "1SD" = "skyblue2", "0.5SD" = "deepskyblue3"))
+    scale_fill_manual(values = c("2SD" = "lightblue1", "1SD" = "skyblue2", "0.5SD" = "deepskyblue3"))
   
   
   # Add resilient and vulnerable text
   if(slope < 0){
-    plot <-plot + geom_text(x=max(na.omit(df[[adversity]]))-5,y=max(na.omit(df[[outcome]]))-5,label="Resilient",alpha=0.2,color="grey") + geom_text(x=min(na.omit(df[[adversity]]))+5,y=min(na.omit(df[[outcome]]))+5,label="Vulnerable",alpha=0.2,color="grey")
+    plot <-plot + geom_text(x=max(na.omit(df[[adversity]]))-5,y=max(na.omit(df[[outcome]]))-5,label="Resilient",alpha=0.2,color="grey",size=7) + geom_text(x=min(na.omit(df[[adversity]]))+5,y=min(na.omit(df[[outcome]]))+5,label="Vulnerable",alpha=0.2,color="grey",size=7)
   }
   else{
-    plot <- plot + geom_text(x=min(na.omit(df[[adversity]]))+5,y=max(na.omit(df[[outcome]]))-5,label="Vulnerable",alpha=0.2,color="grey") + geom_text(x=max(na.omit(df[[adversity]]))-5,y=min(na.omit(df[[outcome]]))+5,label="Resilient",alpha=0.2,color="grey")
+    plot <- plot + geom_text(x=min(na.omit(df[[adversity]]))+5,y=max(na.omit(df[[outcome]]))-5,label="Vulnerable",alpha=0.2,color="grey",size=7) + geom_text(x=max(na.omit(df[[adversity]]))-5,y=min(na.omit(df[[outcome]]))+5,label="Resilient",alpha=0.2,color="grey",size=7)
   }
   
   return(plot)
@@ -540,7 +540,7 @@ visualization_groups <- function(df,adversity,outcome,adjusted_lm,groups,main="C
   
   # Viz
   plot <- ggplot(df, aes(x = .data[[adversity]], y = .data[[outcome]], color = group)) +
-    geom_point(shape=1,size=0.8) +
+    geom_point(shape=16,size=1.5) +
     geom_abline(intercept = intercept, slope = slope, color = "grey", linetype = "solid") +
     labs(
       x = if(xlab==""){adversity}else{xlab},
@@ -548,19 +548,19 @@ visualization_groups <- function(df,adversity,outcome,adjusted_lm,groups,main="C
       title = main,
       color = "Group"
     ) +
-    theme_minimal(base_size = 10) +
-    theme(plot.title = element_text(size = 10))+
-    scale_color_manual(values = c("resilient" = "skyblue", "average" = "grey", "vulnerable" = "coral"))
+    theme_minimal(base_size = 18) +
+    theme(plot.title = element_text(size = 18))+
+    scale_color_manual(values = c("resilient" = "cadetblue4", "average" = "grey60", "vulnerable" = "coral"))
   
   # Add resilient and vulnerable text + lines for the seperation of the groups
   if(slope < 0){
-    plot <-plot + geom_text(x=max(na.omit(df[[adversity]]))-5,y=max(na.omit(df[[outcome]]))-5,label="Resilient",alpha=0.2,color="grey") + geom_text(x=min(na.omit(df[[adversity]]))+5,y=min(na.omit(df[[outcome]]))+5,label="Vulnerable",alpha=0.2,color="grey")
+    plot <-plot + geom_text(x=max(na.omit(df[[adversity]]))-5,y=max(na.omit(df[[outcome]]))-5,label="Resilient",alpha=0.2,color="grey",size=7) + geom_text(x=min(na.omit(df[[adversity]]))+5,y=min(na.omit(df[[outcome]]))+5,label="Vulnerable",alpha=0.2,color="grey",size=7)
     plot <- plot + 
       geom_abline(intercept = intercept+resilient_limit, slope = slope, color = "grey", linetype = "dashed")+
       geom_abline(intercept = intercept+vulnerable_limit, slope = slope, color = "grey", linetype = "dashed")
   }
   else{
-    plot <- plot + geom_text(x=min(na.omit(df[[adversity]]))+5,y=max(na.omit(df[[outcome]]))-5,label="Vulnerable",alpha=0.2,color="grey") + geom_text(x=max(na.omit(df[[adversity]]))-5,y=min(na.omit(df[[outcome]]))+5,label="Resilient",alpha=0.2,color="grey")
+    plot <- plot + geom_text(x=min(na.omit(df[[adversity]]))+5,y=max(na.omit(df[[outcome]]))-5,label="Vulnerable",alpha=0.2,color="grey",size=7) + geom_text(x=max(na.omit(df[[adversity]]))-5,y=min(na.omit(df[[outcome]]))+5,label="Resilient",alpha=0.2,color="grey",size=7)
     plot <- plot + 
       geom_abline(intercept = intercept+resilient_limit, slope = slope, color = "grey", linetype = "dashed")+
       geom_abline(intercept = intercept+vulnerable_limit, slope = slope, color = "grey", linetype = "dashed")
@@ -623,10 +623,10 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
     x_grid <- data.frame(adversity_var = seq(min(df[[adversity_string]], na.rm = TRUE),
                                              max(df[[adversity_string]], na.rm = TRUE),
                                              length.out = 200))
-    
+
     # Rename column to match what the model expects
     colnames(x_grid) <- adversity_string
-    
+
     # Generate predictions over the grid
     preds_conf2 <- list(
       as.data.frame(cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "prediction", level = 0.75)))),
@@ -635,7 +635,7 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
       as.data.frame(cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "confidence", level = 0.99)))),
       as.data.frame(cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "confidence", level = 0.95))))
     )
-    
+
     print(visualization_intervals(df=df,adversity=adversity_string,outcome=outcome_string,adjusted_lm =lm_adjusted,preds_conf2,names_conf,main="Confidence and prediction intervals",xlab="BDI-II score",ylab="Engagement"))
   }
   

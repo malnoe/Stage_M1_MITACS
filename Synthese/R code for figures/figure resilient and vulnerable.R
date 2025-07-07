@@ -26,20 +26,21 @@ make_plot <- function(df, model, title, is_high_better) {
   y_range <- range(df$outcome)
   
   plot <- ggplot(df, aes(x = adversity, y = outcome)) +
-    geom_point(color = "grey50", size = 2) +
-    geom_smooth(method = "lm", se = FALSE, color = "grey50", size=0.8) +
+    geom_point(color = "grey50", size = 2.5) +
+    geom_smooth(method = "lm", se = FALSE, color = "grey5", size=0.8) +
     labs(title = title, x = "Adversity", y = "Outcome") +
-    theme_minimal(base_size = 12)+
+    theme_minimal(base_size = 18)+
     theme(
       axis.text.x = element_blank(),
-      axis.text.y = element_blank()
+      axis.text.y = element_blank(),
+      
     )
 
   if(is_high_better){
-    plot <- plot + geom_text(x=max(na.omit(df$adversity))-2.5,y=max(na.omit(df$outcome))-2.5,label="Resilient",alpha=0.2,color="grey50",size=5) + geom_text(x=min(na.omit(df$adversity))+2.5,y=min(na.omit(df$outcome))+2.5,label="Vulnerable",alpha=0.2,color="grey50",size=5)
+    plot <- plot + geom_text(x=max(na.omit(df$adversity))-2.5,y=max(na.omit(df$outcome))-2.5,label="Resilient",alpha=0.2,color="grey70",size=7) + geom_text(x=min(na.omit(df$adversity))+2.5,y=min(na.omit(df$outcome))+2.5,label="Vulnerable",alpha=0.2,color="grey70",size=7)
   }
   else{
-    plot <-  plot + geom_text(x=min(na.omit(df$adversity))+2.5,y=max(na.omit(df$outcome))-2.5,label="Vulnerable",alpha=0.2,color="grey50",size=5) + geom_text(x=max(na.omit(df$adversity))-2.5,y=min(na.omit(df$outcome))+2.5,label="Resilient",alpha=0.2,color="grey50",size=5)
+    plot <-  plot + geom_text(x=min(na.omit(df$adversity))+2.5,y=max(na.omit(df$outcome))-2.5,label="Vulnerable",alpha=0.2,color="grey70",size=7) + geom_text(x=max(na.omit(df$adversity))-2.5,y=min(na.omit(df$outcome))+2.5,label="Resilient",alpha=0.2,color="grey70",size=7)
   }
   
 }
