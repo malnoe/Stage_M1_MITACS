@@ -328,7 +328,7 @@ classification_quantiles <- function(data_training, new_data, quantile_sub, quan
 
 
 ## SD-based approach ####
-get_sd_in_bins <- function(data_training, lm, bins,outcome_string, adversity_string){
+get_sd_in_bins <- function(data_training, lm, bins,multiplicator,outcome_string, adversity_string){
   df <- data_training
   residuals <- data_training[[outcome_string]] - (lm$coefficients[[1]] + data_training[[adversity_string]] * lm$coefficients[[2]])
   res_SD <- list()
@@ -338,7 +338,7 @@ get_sd_in_bins <- function(data_training, lm, bins,outcome_string, adversity_str
     in_bin <- df[[adversity_string]] >= bins[i] & df[[adversity_string]] < bins[i + 1]
     
     residuals_bin <- residuals[in_bin]
-    res_SD[i] <- sd(residuals_bin, na.rm = TRUE)
+    res_SD[i] <- sd(residuals_bin, na.rm = TRUE)*multiplicator
   }
   return(res_SD)
 }
@@ -420,7 +420,7 @@ visualization_sd_intervals <- function(df,adversity,outcome,adjusted_lm,bins,res
   all_polygons <- data.frame()
   
   for (i in seq_along(res)){
-    res_SD <- res[[i]]$res_SD
+    res_SD <- res[[i]]
     for(j in 1:(length(bins)-1)){
       point_j <- bins[[j]]
       point_j1 <- bins[[j+1]]
@@ -922,15 +922,6 @@ groups_to_test <- list("quantiles (5%)",
                        "Kmeans")
 
 # Reproductibility
-set.seed(1)
-
-#use 70% of dataset as training set and 30% as test set
-sample <- sample(c(TRUE, FALSE), nrow(df_SAr), replace=TRUE, prob=c(0.7,0.3))
-df_train <- df_SAr[sample, ]
-df_test <- df_SAr[!sample, ]
-
-df_perf_classification_tree1 <- estimation_classification(df_train,df_test,adversity_string,outcome_string,bins,groups_to_test)
-
 set.seed(42)
 
 #use 70% of dataset as training set and 30% as test set
@@ -946,22 +937,22 @@ df_long <- df_perf_classification_tree42 %>%
                names_to = "metric",
                values_to = "value") %>%
   mutate(metric = dplyr::recode(metric,
-                                accuracy = "Accuracy du classifieur",
-                                null_model = "Accuracy du modèle nul"))
+                                accuracy = "Classifier",
+                                null_model = "Null model"))
 
 ggplot(df_long, aes(x = support_average, y = value, color = metric)) +
   geom_line(linewidth = 1) +
   geom_point() +
-  labs(title = "Accuracy du modèle nul et du classifieur en fonction de la taille du groupe normal",
-       x = "Taille du groupe normal",
-       y = "Performance",
-       color = "Metrique",
-       size=20) +
+  labs(title = "Accuracy of the classifier vs accuracy of the null model as a function of the average group size",
+       x = "Average group size",
+       y = "Accuracy",
+       color = "Metric",
+       size=15) +
   xlim(0, 129) +
   ylim(0, 1) +
   theme_minimal()+
-  theme(legend.text = element_text(size = 16),
-        legend.title = element_text(size = 16))
+  theme(legend.text = element_text(size = 12),
+        legend.title = element_text(size = 12))
 
 # Selection of the best grouping methods 
 # Criterias :
@@ -969,16 +960,28 @@ ggplot(df_long, aes(x = support_average, y = value, color = metric)) +
 # The model as to predict (rightfully or wrongfully) resilience -> recall >0
 # We want good precision and in second a good recall for the resilient group.
 criteria_index <- df_perf_classification_tree42$support_average>=43&df_perf_classification_tree42$recall_resilient>0
-df_perf_class_comparison <- df_perf_classification_tree[criteria_index,]
+df_perf_class_comparison <- df_perf_classification_tree42[criteria_index,]
 
 ggplot(df_perf_class_comparison,aes(x=1-recall_resilient,y=precision_resilient,label=group_name))+
   geom_point(shape=19,size=1.5)+
   geom_text(hjust=-0.1, vjust=0,size=3)+
-  xlim(0,1)+
-  ylim(0,1)+
+  xlim(0,1.15)+
+  ylim(0,1.15)+
   labs(title="Comparison of the grouping methods",
        x="1- recall of the resilient group",
        y= "precision of the resilient group")+
   theme_minimal()
 
+# Just look at the resilience 
+criteria_index <- df_perf_classification_tree42$support_average>=43&df_perf_classification_tree42$recall_resilient>0
+df_perf_class_comparison <- df_perf_classification_tree42[criteria_index,]
 
+ggplot(df_perf_class_comparison,aes(x=1-recall_resilient,y=precision_resilient,label=group_name))+
+  geom_point(shape=19,size=1.5)+
+  geom_text(hjust=-0.1, vjust=0,size=3)+
+  xlim(0,1.15)+
+  ylim(0,1.15)+
+  labs(title="Comparison of the grouping methods",
+       x="1- recall of the resilient group",
+       y= "precision of the resilient group")+
+  theme_minimal()
