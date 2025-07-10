@@ -290,3 +290,13 @@ for(group_name in list_groups){
   alpha <- ss_ranef_alpha(y=d[[paste0("tr_residuals_",group_name,"_dh_sum")]], unit=d$id)
   list_pct_PIP_PSS_tr_res[[paste0("tr_residuals_",group_name,"_dh_sum")]] <- pct_PIP(alpha,seq(from=0.5,to=1,by=0.05))
 }
+## Trying to modify the priors
+
+priors <- list(gamma="gamma[j]~dbern(0.9)")
+alpha_prior_pss <- ss_ranef_alpha(y=d$residuals_ghq_pss, unit=d$id,priors=priors)
+posterior_summary(alpha_prior_pss, ci = 0.90, digits = 2)
+ranef_summary(alpha_prior_pss, ci = 0.95, digits = 2)
+summary(ranef_summary(alpha_prior_pss, ci = 0.95, digits = 2)$PIP)
+pct_PIP_alpha_prior_pss <- pct_PIP (alpha_prior_pss,seq(from=0.1,to=1,by=0.1))
+View(pct_PIP_alpha_prior_pss)
+View(pct_PIP_alpha_pss)

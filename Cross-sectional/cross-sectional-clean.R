@@ -3,6 +3,9 @@
 ## Packages ####
 library(dplyr) # dataframe managment
 library(ggplot2) # ploting
+library(car)  # For VIF
+library(caret)  # for createFolds
+library(randomForest)
 library(tidyr) # dataframe management
 library(gridExtra) # plotinh
 library(haven) # read sav data
@@ -641,13 +644,13 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
   
   
   # Credibility intervals
-  preds_cred <- list(
-  as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.0005,upr=0.9995))),
-  as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.005,upr=0.995))),
-  as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.025,upr=0.975))),
-  as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.05,upr=0.95))),
-  as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.125,upr=0.875))),
-  as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.25,upr=0.75)))
+  preds_cred <- list(as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.0005,upr=0.9995))),
+                     as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.005,upr=0.995))),
+                     as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.025,upr=0.975))),
+                     as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.05,upr=0.95))),
+                     as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.125,upr=0.875))),
+                     as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.25,upr=0.75)))
+    
 )
   names_cred <- list(
     "cred. 99.9%",
@@ -723,11 +726,16 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
 # Variables used
 residuals_vars <- c("T1_SES_total_SA","T1_WES_total", "T1_BDI_II","T1_edu_1a")
 explication_vars <- c("T1_Sex","T1_Age",paste0("T1_CYRM_", 1:28),paste0("T1_PoNS_",1:8),paste0("T1_SF15_",1:15),paste0("T1_CPTS_",1:20),paste0("T1_FAS_",1:9),paste0("T1_BCE_",1:10))
-#explication_vars_sum <- c("T1_Sex","T1_Age","T1_CYRM28_total","T1_PoNS","T1_SF_14_PHC","T1_CPTS","T1_FAS","T1_BCE")
+#explication_vars <- c("T1_Sex","T1_Age","T1_CYRM28_total","T1_PoNS","T1_SF_14_PHC","T1_CPTS","T1_FAS","T1_BCE")
 
 # Dataframe with SES or WES + pertinent variables
-df_SAr <- df_SA[(!is.na(df_SA$T1_SES_total_SA)|!is.na(df_SA$T1_WES_total)) & !is.na(df_SA$T1_BDI_II)&!is.na(df_SA$T1_CYRM_10),c(residuals_vars,explication_vars,"Master_ID")]
+df_SAr <- df_SA[(!is.na(df_SA$T1_SES_total_SA)|!is.na(df_SA$T1_WES_total)) & !is.na(df_SA$T1_BDI_II),c(residuals_vars,explication_vars,"Master_ID")]
 dim(df_SAr) # 423 individuals
+
+# Suppr individuals with over 30% of missing data
+indices <- which(rowMeans(is.na(df_SAr)) > 0.3)
+df_SAr <- df_SAr[-indices,]
+dim(df_SAr)
 
 # Impute data 
 df_SAr_wtWESSES <- df_SAr[explication_vars]
@@ -772,9 +780,8 @@ df_n_groups_BDI_Engagement <- all_groups_BDI_Engagement$df_n_groups
 
 
 ## Classification functions ####
-classification_metrics <- function(true_labels, predicted_labels) {
+classification_metrics <- function(true_labels, predicted_labels,levels=c("resilient", "average", "vulnerable")) {
   # Convert to factors with same levels
-  levels <- c("resilient", "average", "vulnerable")
   true_labels <- factor(true_labels, levels = levels)
   predicted_labels <- factor(predicted_labels, levels = levels)
   
@@ -842,9 +849,38 @@ classification_metrics <- function(true_labels, predicted_labels) {
   return(results)
 }
 
-estimation_classification <- function(df_train,df_test,adversity_string,outcome_string,bins,list_group_names,predictors=c("T1_Sex", "T1_Age", paste0("T1_CYRM_", 1:28))){
-  set.seed(1) # For reproductibility
+remove_high_vif <- function(df, predictors, threshold = 5) {
+  # Garder seulement les variables non constantes
+  non_constant <- predictors[sapply(df[, predictors, drop = FALSE], function(x) length(unique(x)) > 1)]
+  
+  # Retirer les variables avec trop peu de niveaux uniques (ex : 1 ou 2 niveaux sur une variable censée être continue)
+  non_low_variance <- non_constant[sapply(df[, non_constant, drop = FALSE], function(x) length(unique(x)) > 3)]
+  
+  if (length(non_low_variance) < 2) {
+    warning("Pas assez de variables valides pour calculer le VIF.")
+    return(non_low_variance)
+  }
+  
+  df$fake_outcome <- 1
+  f <- as.formula(paste("fake_outcome ~", paste(non_low_variance, collapse = " + ")))
+  lm_fit <- lm(f, data = df)
+  vif_values <- car::vif(lm_fit)
+  print("aa")
+  print(vif_values)
+  print("bbb")
+  
+  kept_predictors <- names(vif_values)[vif_values < threshold]
+  return(kept_predictors)
+}
+
+
+estimation_classification <- function(df_train,df_test,adversity_string,outcome_string,bins,list_group_names,predictors){
   res <- data.frame()
+  
+  # Get the right predictors
+  print(length(predictors))
+  predictors_filtered <- remove_high_vif(df_train,predictors,threshold = 5)
+  print(length(predictors_filtered))
   
   # Get the groupings for test and train
   res_data_train <- adjusted_fit(df_train,adversity_string,outcome_string)
@@ -857,15 +893,17 @@ estimation_classification <- function(df_train,df_test,adversity_string,outcome_
     print(group_name)
     
     # We get the groups for the chosen grouping for test and train
-    df_train[["groups"]] <- df_train_result[[group_name]]
-    df_test[["groups"]] <- df_test_result[[group_name]]
+    # Assign group labels
+    df_train[["groups"]] <- as.factor(df_train_result[[group_name]])
+    df_test[["groups"]] <- as.factor(df_test_result[[group_name]])
     
-    # We build the classification tree from the train data
-    formula <- as.formula(paste("groups ~", paste(predictors, collapse = " + ")))
-    arbre <- rpart(formula, data = df_train, method = "class")
     
-    # Get the prediction on the test data
-    predictions <- predict(arbre, newdata=df_test, type = "class")
+    # Train random forest
+    formula <- as.formula(paste("groups ~", paste(predictors_filtered, collapse = " + ")))
+    rf_model <- randomForest(formula, data = df_train, ntree = 500, mtry = floor(sqrt(length(predictors_filtered))), importance = TRUE)
+    
+    # Predict
+    predictions <- predict(rf_model, newdata = df_test)
     
     # Metrics
     metrics <- classification_metrics(df_test[["groups"]],predictions)
@@ -896,30 +934,157 @@ estimation_classification <- function(df_train,df_test,adversity_string,outcome_
   return(res)
 }
 
+estimation_classification_cv <- function(df, adversity_string, outcome_string, bins, list_group_names, predictors, k = 5, seed = 123){
+  set.seed(seed)
+  res <- data.frame()
+  
+  # Get the groupings once, from the full dataset
+  res_data_train <- adjusted_fit(df, adversity_string, outcome_string)
+  df_result <- get_all_groups(df, adversity_string, outcome_string, bins, res_data_train, visualization = FALSE)$df_result
+  # Remove high VIF predictors
+  predictors <- remove_high_vif(df, predictors, threshold = 5)
+  
+  for(i in 1:length(list_group_names)){
+    group_name <- list_group_names[[i]]
+    print(paste("Running CV for group:", group_name))
+    
+    df[["groups"]] <- as.factor(df_result[[group_name]])
+    
+    # Create folds (stratified)
+    folds <- createFolds(df$groups, k = k, list = TRUE, returnTrain = FALSE)
+    
+    # Initialize metrics accumulators
+    all_metrics <- list()
+    
+    for (fold_idx in seq_along(folds)) {
+      test_indices <- folds[[fold_idx]]
+      train_data <- df[-test_indices, ]
+      test_data  <- df[test_indices, ]
+      
+      # Fit random forest
+      formula <- as.formula(paste("groups ~", paste(predictors, collapse = " + ")))
+      rf_model <- randomForest(formula, data = train_data, ntree = 500, mtry = floor(sqrt(length(predictors))), importance = FALSE)
+      
+      # Predict
+      preds <- predict(rf_model, newdata = test_data)
+      
+      # Evaluate
+      metrics <- classification_metrics(test_data[["groups"]], preds)
+      all_metrics[[fold_idx]] <- metrics
+    }
+    
+    # Average metrics across folds
+    average_metric <- function(metric_name, accessor = NULL) {
+      values <- sapply(all_metrics, function(m) if (is.null(accessor)) m[[metric_name]][[1]] else m[[metric_name]][[accessor]])
+      return(mean(values, na.rm = TRUE))
+    }
+    
+    support_total <- average_metric("support", "resilient") + average_metric("support", "average") + average_metric("support", "vulnerable")
+    null_model <- max(average_metric("support", "resilient"), average_metric("support", "average"), average_metric("support", "vulnerable")) / support_total
+    
+    res <- rbind(res, data.frame(
+      group_name = group_name,
+      accuracy = average_metric("accuracy"),
+      null_model = null_model,
+      difference = average_metric("accuracy") - null_model,
+      macro_precision = average_metric("macro_precision"),
+      macro_recall = average_metric("macro_recall"),
+      macro_f1 = average_metric("macro_f1"),
+      precision_resilient = average_metric("precision_per_class", "resilient"),
+      recall_resilient = average_metric("recall_per_class", "resilient"),
+      f1score_resilient = average_metric("f1_per_class", "resilient"),
+      precision_average = average_metric("precision_per_class", "average"),
+      recall_average = average_metric("recall_per_class", "average"),
+      f1score_average = average_metric("f1_per_class", "average"),
+      precision_vulnerable = average_metric("precision_per_class", "vulnerable"),
+      recall_vulnerable = average_metric("recall_per_class", "vulnerable"),
+      f1score_vulnerable = average_metric("f1_per_class", "vulnerable"),
+      support_resilient = average_metric("support", "resilient"),
+      support_average = average_metric("support", "average"),
+      support_vulnerable = average_metric("support", "vulnerable")
+    ))
+  }
+  
+  return(res)
+}
 
-## Call of the classification ####
-groups_to_test <- list("quantiles (5%)",
-                       "quantiles (10%)",
-                       "quantiles (15%)",
-                       "quantiles (20%)",
-                       "quantiles (25%)",
-                       "quantiles (30%)",
-                       "quantiles (35%)",
-                       "pred. residuals (75%)",
-                       "pred. residuals (60%)",
-                       "pred. residuals (50%)",
-                       "conf. residuals (99%)",
-                       "conf. residuals (95%)",
-                       "cred. 99.9%",
-                       "cred. 99%",
-                       "cred. 95%",
-                       "cred. 90%",
-                       "cred. 75%",
-                       "cred. 50%",
-                       "2SD",
-                       "1SD",
-                       "0.5SD",
-                       "Kmeans")
+estimation_classification_binary_cv <- function(df, adversity_string, outcome_string, bins, list_group_names, predictors, k = 5, seed = 123){
+  set.seed(seed)
+  res <- data.frame()
+  
+  # Get groupings once from full data
+  res_data_train <- adjusted_fit(df, adversity_string, outcome_string)
+  df_result <- get_all_groups(df, adversity_string, outcome_string, bins, res_data_train, visualization = FALSE)$df_result
+  
+  # Remove high VIF predictors
+  predictors <- remove_high_vif(df, predictors, threshold = 5)
+  
+  for(i in 1:length(list_group_names)){
+    group_name <- list_group_names[[i]]
+    print(paste("Running binary CV for group:", group_name))
+    
+    # Recode groups: average vs non-average
+    df[["groups"]] <- ifelse(df_result[[group_name]] == "average", "average", "non_average")
+    df[["groups"]] <- as.factor(df[["groups"]])
+    
+    # Stratified k-fold
+    folds <- createFolds(df$groups, k = k, list = TRUE, returnTrain = FALSE)
+    all_metrics <- list()
+    
+    for (fold_idx in seq_along(folds)) {
+      test_indices <- folds[[fold_idx]]
+      train_data <- df[-test_indices, ]
+      test_data  <- df[test_indices, ]
+      
+      # Train RF
+      formula <- as.formula(paste("groups ~", paste(predictors, collapse = " + ")))
+      rf_model <- randomForest(formula, data = train_data, ntree = 1000, mtry = floor(sqrt(length(predictors))), importance = FALSE)
+      
+      # Predict
+      preds <- predict(rf_model, newdata = test_data)
+      
+      # Evaluate
+      metrics <- classification_metrics(test_data[["groups"]], preds,levels=c("average","non_average"))
+      all_metrics[[fold_idx]] <- metrics
+    }
+    
+    # Average metrics across folds
+    average_metric <- function(metric_name, accessor = NULL) {
+      values <- sapply(all_metrics, function(m) if (is.null(accessor)) m[[metric_name]][[1]] else m[[metric_name]][[accessor]])
+      return(mean(values, na.rm = TRUE))
+    }
+    
+    support_total <- average_metric("support", "average") + average_metric("support", "non_average")
+    null_model <- max(average_metric("support", "average"), average_metric("support", "non_average")) / support_total
+    
+    res <- rbind(res, data.frame(
+      group_name = group_name,
+      accuracy = average_metric("accuracy"),
+      null_model = null_model,
+      difference = average_metric("accuracy") - null_model,
+      macro_precision = average_metric("macro_precision"),
+      macro_recall = average_metric("macro_recall"),
+      macro_f1 = average_metric("macro_f1"),
+      precision_average = average_metric("precision_per_class", "average"),
+      recall_average = average_metric("recall_per_class", "average"),
+      f1score_average = average_metric("f1_per_class", "average"),
+      precision_non_average = average_metric("precision_per_class", "non_average"),
+      recall_non_average = average_metric("recall_per_class", "non_average"),
+      f1score_non_average = average_metric("f1_per_class", "non_average"),
+      support_average = average_metric("support", "average"),
+      support_non_average = average_metric("support", "non_average")
+    ))
+  }
+  
+  return(res)
+}
+
+## Commands for the classification ####
+groups_to_test <- list("quantiles (5%)","quantiles (10%)","quantiles (15%)","quantiles (20%)","quantiles (25%)","quantiles (30%)","quantiles (35%)",
+                       "pred. residuals (75%)","pred. residuals (60%)","pred. residuals (50%)","conf. residuals (99%)","conf. residuals (95%)",
+                       "cred. 99.9%","cred. 99%","cred. 95%","cred. 90%","cred. 75%","cred. 50%",
+                       "2SD","1SD","0.5SD","Kmeans")
+
 
 # Reproductibility
 set.seed(42)
@@ -929,7 +1094,29 @@ sample <- sample(c(TRUE, FALSE), nrow(df_SAr), replace=TRUE, prob=c(0.7,0.3))
 df_train <- df_SAr[sample, ]
 df_test <- df_SAr[!sample, ]
 
-df_perf_classification_tree42 <- estimation_classification(df_train,df_test,adversity_string,outcome_string,bins,groups_to_test)
+df_perf_classification_tree42 <- estimation_classification(df_train,df_test,adversity_string,outcome_string,bins,groups_to_test,predictors = explication_vars)
+
+df_perf_cv <- estimation_classification_cv(
+  df = df_SAr,
+  adversity_string = adversity_string,
+  outcome_string = outcome_string,
+  bins = bins,
+  list_group_names = groups_to_test,
+  predictors = explication_vars,
+  k = 10
+)
+
+df_perf_binary_cv <- estimation_classification_binary_cv(
+  df = df_SAr,
+  adversity_string = adversity_string,
+  outcome_string = outcome_string,
+  bins = bins,
+  list_group_names = groups_to_test,
+  predictors = explication_vars,
+  k = 10
+)
+
+
 
 #Visualization evolution of the null model and classifier accuracy as a function of the size of the average group
 df_long <- df_perf_classification_tree42 %>%
@@ -948,7 +1135,7 @@ ggplot(df_long, aes(x = support_average, y = value, color = metric)) +
        y = "Accuracy",
        color = "Metric",
        size=15) +
-  xlim(0, 129) +
+  xlim(0, 130) +
   ylim(0, 1) +
   theme_minimal()+
   theme(legend.text = element_text(size = 12),
@@ -959,29 +1146,154 @@ ggplot(df_long, aes(x = support_average, y = value, color = metric)) +
 # The average group size is at least 1/3 of the whole dataset -> >129/3=
 # The model as to predict (rightfully or wrongfully) resilience -> recall >0
 # We want good precision and in second a good recall for the resilient group.
-criteria_index <- df_perf_classification_tree42$support_average>=43&df_perf_classification_tree42$recall_resilient>0
+criteria_index <- df_perf_classification_tree42$support_average>=df_perf_classification_tree42$support_resilient&df_perf_classification_tree42$support_average>=df_perf_classification_tree42$support_vulnerable&df_perf_classification_tree42$recall_resilient>0.0001&df_perf_classification_tree42$precision_resilient>0.0001
 df_perf_class_comparison <- df_perf_classification_tree42[criteria_index,]
 
 ggplot(df_perf_class_comparison,aes(x=1-recall_resilient,y=precision_resilient,label=group_name))+
   geom_point(shape=19,size=1.5)+
   geom_text(hjust=-0.1, vjust=0,size=3)+
-  xlim(0,1.15)+
-  ylim(0,1.15)+
+  xlim(0,1)+
+  ylim(0,1)+
   labs(title="Comparison of the grouping methods",
        x="1- recall of the resilient group",
        y= "precision of the resilient group")+
   theme_minimal()
 
-# Just look at the resilience 
-criteria_index <- df_perf_classification_tree42$support_average>=43&df_perf_classification_tree42$recall_resilient>0
-df_perf_class_comparison <- df_perf_classification_tree42[criteria_index,]
 
-ggplot(df_perf_class_comparison,aes(x=1-recall_resilient,y=precision_resilient,label=group_name))+
-  geom_point(shape=19,size=1.5)+
-  geom_text(hjust=-0.1, vjust=0,size=3)+
-  xlim(0,1.15)+
-  ylim(0,1.15)+
-  labs(title="Comparison of the grouping methods",
-       x="1- recall of the resilient group",
-       y= "precision of the resilient group")+
-  theme_minimal()
+
+## LORA Cross-sectional ####
+
+# Get the data
+df_LORA <- readRDS("C:/Users/garan/Documents/Ecole/M1/Stage/Internship_repo/Longitudinal/LORA/ds_forJan.rds")
+
+# List all the interesting items/variables
+
+# predictive
+audit <- paste0("audit",1:10)
+bfi <- paste0("bfi_",1:10)
+cdrisk <- paste0("cdrisk_",1:25)
+cerq <- paste0("cerq_",1:25)
+cope <- paste0("cope_",1:28)
+ctq <- paste0("ctq_",1:25)
+fsozu <- paste0("fsozu_",1:14)
+gpass <- paste0("gpass_",c(1,2,6,8,10:14,16:18,20,26,27))
+gse <- paste0("gse_",1:10)
+ielc <- paste0("ielc_",1:28)
+le <- paste0("le_",1:27)
+lotr <- paste0("lotr_",1:10)
+who5 <- paste0("who5_",1:5)
+
+# outcome/adversity
+pss <- paste0("pss_",1:10)
+dh <- paste0("dh_",c(1:28,44:58))
+ghq <- paste0("ghq_", 1:28)
+
+variables <- c("id","age","education","drogen","income","employment_status","gender",audit,bfi,cdrisk,cerq,cope,ctq,fsozu,gpass,gse,ielc,le,lotr,who5,pss,dh,ghq)
+
+# Select variables and t=1
+df_LORA <- df_LORA[df_LORA$t==1&!is.na(df_LORA$study),variables]
+
+# Format the dataframe
+df_LORA <- as.data.frame(lapply(df_LORA, function(x) as.numeric(as.character(x))))
+
+# Replace negative values by NAs
+for(variable in variables){
+  df_LORA[[variable]] <- ifelse(df_LORA[[variable]]>=0, df_LORA[[variable]], NA)
+}
+
+# Recode the items if needed
+recode <- function(df,variables_to_recode,min,max){
+  for(variable in variables_to_recode){
+    inverse_var <- paste0(variable, "_inverse")
+    df[[inverse_var]] <- ifelse(df[[variable]] %in% min:max, max + min - df[[variable]], NA)
+  }
+  return(df)
+}
+
+  # BFI
+bfi_to_recode <- paste0("bfi_",c(1,3,4,5,7))
+df_LORA <- recode(df_LORA,bfi_to_recode,min=1,max=5)
+bfi <- c(paste0("bfi_",c(2,6,8,9,10)),paste0("bfi_",c(1,3,4,5,7),"_inverse"))
+
+  # Dysfunctional coping
+cope_dysfunctional <- paste0("cope_",c(1,19,3,8,6,16,4,11,13,26,22,27))
+  # Functional coping
+cope_functional <- paste0("cope_",c(5,15,12,17,18,28,2,7,10,23,9,21,14,25,20,24))
+
+  # CTQ
+ctq_to_recode <- paste0("ctq_",c(2,5,7,12,17,23,25))
+df_LORA <- recode(df_LORA,ctq_to_recode,min=1,max=5)
+ctq <- c(paste0("ctq_",c(2,5,7,12,17,23,25),"_inverse"),paste0("ctq_",c(1,3,4,6,8,9,10,11,13,14,15,16,18,19,20,21,22,24)))
+
+  # IELC
+ielc_to_recode <- paste0("ielc_",c(3:5,10:13,15,22,26,27))
+df_LORA <- recode(df_LORA,ielc_to_recode,min=0,max=1)
+ielc <- c(paste0("ielc_",c(3:5,10:13,15,22,26,27),"_inverse"),paste0("ielc_",c(1,2,4:9,14,16:21,23:25,28)))
+
+  # LOTR
+lotr_to_recode <- paste0("lotr_",c(3,7,9))
+df_LORA <- recode(df_LORA,lotr_to_recode,min=0,max=4)
+lotr <- c(paste0("lotr_",c(3,7,9),"_inverse"),paste0("lotr_",c(1,4,10)))
+
+  # PSS
+pss_to_recode <- paste0("pss_", c(4, 5, 7, 8))
+df_LORA <- recode(df_LORA,pss_to_recode,min=0,max=4)
+pss <- c(paste0("pss_",c(1:3,6,9,10)),paste0("pss_",c(4, 5, 7, 8),"_inverse"))
+
+# Build sums
+df_LORA[["audit_sum"]] <- rowSums(df_LORA[,audit],na.rm = TRUE)
+df_LORA[["bfi_sum"]] <- rowSums(df_LORA[,bfi],na.rm = TRUE)
+df_LORA[["cdrisk_sum"]] <- rowSums(df_LORA[,cdrisk],na.rm = TRUE)
+df_LORA[["cerq_sum"]] <- rowSums(df_LORA[,cerq],na.rm = TRUE)
+df_LORA[["cope_dys_sum"]] <- rowSums(df_LORA[,cope_dysfunctional],na.rm = TRUE)
+df_LORA[["cope_fun_sum"]] <- rowSums(df_LORA[,cope_functional],na.rm = TRUE)
+df_LORA[["ctq_sum"]] <- rowSums(df_LORA[,ctq],na.rm = TRUE)
+df_LORA[["dh_sum"]] <- rowSums(df_LORA[,dh],na.rm = TRUE)
+df_LORA[["fsozu_sum"]] <- rowSums(df_LORA[,fsozu],na.rm = TRUE)/14
+df_LORA[["gpass_sum"]] <- rowSums(df_LORA[,gpass],na.rm = TRUE)
+df_LORA[["gse_sum"]] <- rowSums(df_LORA[,gse],na.rm = TRUE)
+df_LORA[["ghq_sum"]] <- rowSums(df_LORA[,ghq],,na.rm = TRUE)
+df_LORA[["ielc_sum"]] <- rowSums(df_LORA[,ielc],na.rm = TRUE)
+df_LORA[["le_sum"]] <- rowSums(df_LORA[,le],na.rm = TRUE)
+df_LORA[["lotr_sum"]] <- rowSums(df_LORA[,lotr],na.rm = TRUE)
+df_LORA[["pss_sum"]] <- rowSums(df_LORA[,pss],na.rm = TRUE)
+df_LORA[["who5_sum"]] <- rowSums(df_LORA[,who5],na.rm = TRUE)
+
+
+# Select final variables
+explication_vars_LORA <- c("audit_sum","bfi_sum","cdrisk_sum","cerq_sum",
+                           "cope_dys_sum","cope_fun_sum","ctq_sum","fsozu_sum",
+                           "gpass_sum","gse_sum","ielc_sum","le_sum",
+                           "lotr_sum","who5_sum",
+                           "age","education","drogen","income","employment_status","gender")
+adversity_vars_LORA <- c("dh_sum","pss_sum")
+outcome_var_LORA <- c("ghq_sum")
+
+df_LORA_final <- df_LORA[,c(explication_vars_LORA,adversity_vars_LORA,outcome_var_LORA)]
+
+
+# Miss forest
+LORAdh <- df_LORA_final[!is.na(df_LORA_final$dh_sum) & !is.na(df_LORA_final$ghq_sum)&!is.na(df_LORA_final$age)&!is.na(df_LORA_final$gender),]
+LORApss <- df_LORA_final[!is.na(df_LORA_final$pss_sum) & !is.na(df_LORA_final$ghq_sum)&!is.na(df_LORA_final$age)&!is.na(df_LORA_final$gender),]
+
+LORA_pss.mf <- missForest::missForest(xmis = LORApss)
+LORA_pss.r <- LORA_pss.mf$ximp
+LORA_dh.mf <- missForest::missForest(xmis = LORAdh)
+LORA_dh.r <- LORA_dh.mf$ximp
+
+ 
+
+# Residualization with DH
+
+
+
+
+
+
+
+
+
+
+
+
+
