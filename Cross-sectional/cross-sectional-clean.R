@@ -1158,7 +1158,7 @@ visualization_recall_precision <- function(df_perf){
     theme_minimal()
 }
 
-## Commands for the classification ####
+## Commands for the classification on items RYSE ####
 groups_to_test <- list("2SD","1SD","0.5SD","quantiles (5%)","quantiles (10%)","quantiles (15%)","quantiles (20%)","quantiles (25%)","quantiles (30%)","quantiles (35%)",
                        "pred. residuals (75%)","pred. residuals (60%)","pred. residuals (50%)","conf. residuals (99%)","conf. residuals (95%)",
                        "cred. 99.9%","cred. 99%","cred. 95%","cred. 90%","cred. 75%","cred. 50%","Kmeans")
@@ -1204,7 +1204,7 @@ visualization_recall_precision(df_perf_cv)
 comparison_accuracy_null_model_classifier(df_perf_binary_cv)
 
 
-## Command classification on sums ####
+## Commands for the classification on sums RYSE ####
 # Variables used
 residuals_vars <- c("T1_SES_total_SA","T1_WES_total", "T1_BDI_II","T1_edu_1a")
 explication_vars_sum <- c("T1_Sex","T1_Age","T1_CYRM28_total","T1_PoNS","T1_SF_14_PHC","T1_CPTS","T1_FAS","T1_BCE")
@@ -1309,7 +1309,6 @@ df_LORA <- readRDS("C:/Users/garan/Documents/Ecole/M1/Stage/Internship_repo/Long
 # List all the interesting items/variables
 
 # predictive
-audit <- paste0("audit",1:10)
 bfi <- paste0("bfi_",1:10)
 cdrisk <- paste0("cdrisk_",1:25)
 cerq <- paste0("cerq_",1:25)
@@ -1321,14 +1320,13 @@ gse <- paste0("gse_",1:10)
 ielc <- paste0("ielc_",1:28)
 le <- paste0("le_",1:27)
 lotr <- paste0("lotr_",1:10)
-who5 <- paste0("who5_",1:5)
 
 # outcome/adversity
 pss <- paste0("pss_",1:10)
 dh <- paste0("dh_",c(1:28,44:58))
 ghq <- paste0("ghq_", 1:28)
 
-variables <- c("id","age","education","drogen","income","employment_status","gender",audit,bfi,cdrisk,cerq,cope,ctq,fsozu,gpass,gse,ielc,le,lotr,who5,pss,dh,ghq)
+variables <- c("id","age","income","employment_status","gender",bfi,cdrisk,cerq,cope,ctq,fsozu,gpass,gse,ielc,le,lotr,pss,dh,ghq)
 
 # Select variables and t=1
 df_LORA <- df_LORA[df_LORA$t==1&!is.na(df_LORA$study),variables]
@@ -1355,11 +1353,6 @@ bfi_to_recode <- paste0("bfi_",c(1,3,4,5,7))
 df_LORA <- recode(df_LORA,bfi_to_recode,min=1,max=5)
 bfi <- c(paste0("bfi_",c(2,6,8,9,10)),paste0("bfi_",c(1,3,4,5,7),"_inverse"))
 
-  # Dysfunctional coping
-cope_dysfunctional <- paste0("cope_",c(1,19,3,8,6,16,4,11,13,26,22,27))
-  # Functional coping
-cope_functional <- paste0("cope_",c(5,15,12,17,18,28,2,7,10,23,9,21,14,25,20,24))
-
   # CTQ
 ctq_to_recode <- paste0("ctq_",c(2,5,7,12,17,23,25))
 df_LORA <- recode(df_LORA,ctq_to_recode,min=1,max=5)
@@ -1380,13 +1373,56 @@ pss_to_recode <- paste0("pss_", c(4, 5, 7, 8))
 df_LORA <- recode(df_LORA,pss_to_recode,min=0,max=4)
 pss <- c(paste0("pss_",c(1:3,6,9,10)),paste0("pss_",c(4, 5, 7, 8),"_inverse"))
 
+
+## LORA Sums and subscales ####
+# Able coping 1 and 19
+cope_able <- paste0("cope_",c(1,19))
+# Verl coping 3 and 8
+cope_verl <- paste0("cope_",c(3,8))
+# emU 5 and 15
+cope_emu <- paste0("cope_",c(5,15))
+# Ruck 6 and 16
+cope_ruck <- paste0("cope_",c(6,16))
+# poUm 12 and 17
+cope_poum <- paste0("cope_",c(12,17))
+# Hum 18 and 28
+cope_hum <- paste0("cope_",c(18,28))
+# akBe 2 and 7
+cope_akbe <- paste0("cope_",c(2,7))
+# AlDro 4 and 11
+cope_aldro <- paste0("cope_",c(4,11))
+# insUn 10 and 23
+cope_insun <- paste0("cope_",c(10,23))
+# ausE 9 and 21
+cope_ause <- paste0("cope_",c(9,21))
+# Plan 14 and 25
+cope_plan <- paste0("cope_",c(14,25))
+# Akze 20 and 24
+cope_akze <- paste0("cope_",c(20,24))
+# Sebe 13 and 26
+cope_sebe <- paste0("cope_",c(13,26))
+# Relo 22 and 27
+cope_reli <- paste0("cope_",c(22,27))
+
+
 # Build sums
-df_LORA[["audit_sum"]] <- rowSums(df_LORA[,audit],na.rm = TRUE)
 df_LORA[["bfi_sum"]] <- rowSums(df_LORA[,bfi],na.rm = TRUE)
 df_LORA[["cdrisk_sum"]] <- rowSums(df_LORA[,cdrisk],na.rm = TRUE)
 df_LORA[["cerq_sum"]] <- rowSums(df_LORA[,cerq],na.rm = TRUE)
-df_LORA[["cope_dys_sum"]] <- rowSums(df_LORA[,cope_dysfunctional],na.rm = TRUE)
-df_LORA[["cope_fun_sum"]] <- rowSums(df_LORA[,cope_functional],na.rm = TRUE)
+df_LORA[["able"]] <- rowSums(df_LORA[,cope_able],na.rm = TRUE)
+df_LORA[["verl"]] <- rowSums(df_LORA[,cope_verl],na.rm = TRUE)
+df_LORA[["emu"]] <- rowSums(df_LORA[,cope_emu],na.rm = TRUE)
+df_LORA[["ruck"]] <- rowSums(df_LORA[,cope_ruck],na.rm = TRUE)
+df_LORA[["poum"]] <- rowSums(df_LORA[,cope_poum],na.rm = TRUE)
+df_LORA[["hum"]] <- rowSums(df_LORA[,cope_hum],na.rm = TRUE)
+df_LORA[["akbe"]] <- rowSums(df_LORA[,cope_akbe],na.rm = TRUE)
+df_LORA[["aldro"]] <- rowSums(df_LORA[,cope_aldro],na.rm = TRUE)
+df_LORA[["insun"]] <- rowSums(df_LORA[,cope_insun],na.rm = TRUE)
+df_LORA[["ause"]] <- rowSums(df_LORA[,cope_ause],na.rm = TRUE)
+df_LORA[["plan"]] <- rowSums(df_LORA[,cope_plan],na.rm = TRUE)
+df_LORA[["akze"]] <- rowSums(df_LORA[,cope_akze],na.rm = TRUE)
+df_LORA[["sebe"]] <- rowSums(df_LORA[,cope_sebe],na.rm = TRUE)
+df_LORA[["reli"]] <- rowSums(df_LORA[,cope_reli],na.rm = TRUE)
 df_LORA[["ctq_sum"]] <- rowSums(df_LORA[,ctq],na.rm = TRUE)
 df_LORA[["dh_sum"]] <- rowSums(df_LORA[,dh],na.rm = TRUE)
 df_LORA[["fsozu_sum"]] <- rowSums(df_LORA[,fsozu],na.rm = TRUE)/14
@@ -1397,15 +1433,15 @@ df_LORA[["ielc_sum"]] <- rowSums(df_LORA[,ielc],na.rm = TRUE)
 df_LORA[["le_sum"]] <- rowSums(df_LORA[,le],na.rm = TRUE)
 df_LORA[["lotr_sum"]] <- rowSums(df_LORA[,lotr],na.rm = TRUE)
 df_LORA[["pss_sum"]] <- rowSums(df_LORA[,pss],na.rm = TRUE)
-df_LORA[["who5_sum"]] <- rowSums(df_LORA[,who5],na.rm = TRUE)
 
 
 # Select final variables
-explication_vars_LORA <- c("audit_sum","bfi_sum","cdrisk_sum","cerq_sum",
-                           "cope_dys_sum","cope_fun_sum","ctq_sum","fsozu_sum",
+explication_vars_LORA <- c("bfi_sum","cdrisk_sum","cerq_sum",
+                           "able","verl","emu","ruck","poum","hum",
+                           "akbe","aldro","insun","ause","plan","akze",
+                           "sebe","reli","ctq_sum","fsozu_sum",
                            "gpass_sum","gse_sum","ielc_sum","le_sum",
-                           "lotr_sum","who5_sum",
-                           "age","education","drogen","income","employment_status","gender")
+                           "lotr_sum","age","income","employment_status","gender")
 adversity_vars_LORA <- c("dh_sum","pss_sum")
 outcome_var_LORA <- c("ghq_sum")
 
@@ -1421,8 +1457,9 @@ LORA_pss.r <- LORA_pss.mf$ximp
 LORA_dh.mf <- missForest::missForest(xmis = LORAdh)
 LORA_dh.r <- LORA_dh.mf$ximp
 
-## LORA - PSS ####
 
+
+# LORA - PSS 
 # Residualization with PSS
 df <- LORA_pss.r
 adversity_string <- "pss_sum"
@@ -1446,24 +1483,14 @@ groups_to_test <- list("quantiles (5%)","quantiles (10%)","quantiles (15%)","qua
   # Reproductibility
 set.seed(42)
 
-  #use 70% of dataset as training set and 30% as test set
-sample <- sample(c(TRUE, FALSE), nrow(LORA_pss.r), replace=TRUE, prob=c(0.7,0.3))
-df_train_pss <- LORA_pss.r[sample, ]
-df_test_pss <- LORA_pss.r[!sample, ]
-
-df_perf_classification_tree42_pss <- estimation_classification(df_train_pss,df_test_pss,adversity_string,outcome_string,bins_pss,groups_to_test,predictors = explication_vars_LORA)
+#   #use 70% of dataset as training set and 30% as test set
+# sample <- sample(c(TRUE, FALSE), nrow(LORA_pss.r), replace=TRUE, prob=c(0.7,0.3))
+# df_train_pss <- LORA_pss.r[sample, ]
+# df_test_pss <- LORA_pss.r[!sample, ]
+# 
+# df_perf_classification_tree42_pss <- estimation_classification(df_train_pss,df_test_pss,adversity_string,outcome_string,bins_pss,groups_to_test,predictors = explication_vars_LORA)
 
 df_perf_cv_pss <- estimation_classification_cv(
-  df = LORA_pss.r,
-  adversity_string = adversity_string,
-  outcome_string = outcome_string,
-  bins = bins_pss,
-  list_group_names = groups_to_test,
-  predictors = explication_vars_LORA,
-  k = 2
-)
-
-df_perf_binary_cv_pss <- estimation_classification_binary_cv(
   df = LORA_pss.r,
   adversity_string = adversity_string,
   outcome_string = outcome_string,
@@ -1473,17 +1500,27 @@ df_perf_binary_cv_pss <- estimation_classification_binary_cv(
   k = 10
 )
 
+# df_perf_binary_cv_pss <- estimation_classification_binary_cv(
+#   df = LORA_pss.r,
+#   adversity_string = adversity_string,
+#   outcome_string = outcome_string,
+#   bins = bins_pss,
+#   list_group_names = groups_to_test,
+#   predictors = explication_vars_LORA,
+#   k = 10
+# )
+
 #Visualizations
 # Test and train 42
-comparison_accuracy_null_model_classifier(df_perf_classification_tree42_pss)
-visualization_recall_precision(df_perf_classification_tree42_pss)
+# comparison_accuracy_null_model_classifier(df_perf_classification_tree42_pss)
+# visualization_recall_precision(df_perf_classification_tree42_pss)
 # CV
 comparison_accuracy_null_model_classifier(df_perf_cv_pss)
 visualization_recall_precision(df_perf_cv_pss)
 # Binary CV
-comparison_accuracy_null_model_classifier(df_perf_binary_cv_pss)
+# comparison_accuracy_null_model_classifier(df_perf_binary_cv_pss)
 
-## LORA - DH ####
+# LORA - DH 
 # Residualization with DH
 df <- LORA_dh.r
 adversity_string <- "dh_sum"
@@ -1501,13 +1538,13 @@ df_n_groups_dh <- all_groups_dh$df_n_groups
 #Classification test with DH
 # Reproductibility
 set.seed(42)
-
-#use 70% of dataset as training set and 30% as test set
-sample <- sample(c(TRUE, FALSE), nrow(LORA_dh.r), replace=TRUE, prob=c(0.7,0.3))
-df_train_dh <- LORA_dh.r[sample, ]
-df_test_dh <- LORA_dh.r[!sample, ]
-
-df_perf_classification_tree42_dh <- estimation_classification(df_train_dh,df_test_dh,adversity_string,outcome_string,bins_dh,groups_to_test,predictors = explication_vars_LORA)
+# 
+# #use 70% of dataset as training set and 30% as test set
+# sample <- sample(c(TRUE, FALSE), nrow(LORA_dh.r), replace=TRUE, prob=c(0.7,0.3))
+# df_train_dh <- LORA_dh.r[sample, ]
+# df_test_dh <- LORA_dh.r[!sample, ]
+# 
+# df_perf_classification_tree42_dh <- estimation_classification(df_train_dh,df_test_dh,adversity_string,outcome_string,bins_dh,groups_to_test,predictors = explication_vars_LORA)
 
 df_perf_cv_dh <- estimation_classification_cv(
   df = LORA_dh.r,
@@ -1519,24 +1556,118 @@ df_perf_cv_dh <- estimation_classification_cv(
   k = 10
 )
 
-df_perf_binary_cv_dh <- estimation_classification_binary_cv(
+# df_perf_binary_cv_dh <- estimation_classification_binary_cv(
+#   df = LORA_dh.r,
+#   adversity_string = adversity_string,
+#   outcome_string = outcome_string,
+#   bins = bins_dh,
+#   list_group_names = groups_to_test,
+#   predictors = explication_vars_LORA,
+#   k = 10
+# )
+
+#Visualization
+# Test and train 42
+# comparison_accuracy_null_model_classifier(df_perf_classification_tree42_dh)
+# visualization_recall_precision(df_perf_classification_tree42_dh)
+# CV
+comparison_accuracy_null_model_classifier(df_perf_cv_dh)
+visualization_recall_precision(df_perf_cv_dh)
+# Binary CV
+# comparison_accuracy_null_model_classifier(df_perf_binary_cv_dh)
+# 
+
+
+## LORA Items ####
+# Sums for PSS, DH and GHQ
+df_LORA[["dh_sum"]] <- rowSums(df_LORA[,dh],na.rm = TRUE)
+df_LORA[["pss_sum"]] <- rowSums(df_LORA[,pss],na.rm = TRUE)
+df_LORA[["ghq_sum"]] <- rowSums(df_LORA[,ghq],na.rm = TRUE)
+
+# Select final variables
+explication_vars_items <- c("age","income","employment_status","gender",bfi,cdrisk,cerq,cope,ctq,fsozu,gpass,gse,ielc,le,lotr)
+adversity_vars_LORA <- c("dh_sum","pss_sum")
+outcome_var_LORA <- c("ghq_sum")
+
+df_LORA_final <- df_LORA[,c(explication_vars_items,adversity_vars_LORA,outcome_var_LORA)]
+
+
+
+# Miss forest
+LORAdh <- df_LORA_final[!is.na(df_LORA_final$dh_sum) & !is.na(df_LORA_final$ghq_sum)&!is.na(df_LORA_final$age)&!is.na(df_LORA_final$gender),]
+LORApss <- df_LORA_final[!is.na(df_LORA_final$pss_sum) & !is.na(df_LORA_final$ghq_sum)&!is.na(df_LORA_final$age)&!is.na(df_LORA_final$gender),]
+
+# Suppr individuals with over 30% of missing data
+indices <- which(rowMeans(is.na(LORAdh)) > 0.3)
+LORAdh <- LORAdh[-indices,]
+dim(LORAdh)
+
+indices <- which(rowMeans(is.na(LORApss)) > 0.3)
+LORApss <- LORApss[-indices,]
+dim(LORApss)
+
+LORA_pss.mf <- missForest::missForest(xmis = LORApss)
+LORA_pss.r <- LORA_pss.mf$ximp
+LORA_dh.mf <- missForest::missForest(xmis = LORAdh)
+LORA_dh.r <- LORA_dh.mf$ximp
+
+
+# LORA - PSS 
+df <- LORA_pss.r
+adversity_string <- "pss_sum"
+outcome_string <- "ghq_sum"
+outcome <- df$ghq_sum
+bins_pss <- c(0,14,26,40)
+
+# Classification test with PSS
+groups_to_test <- list("quantiles (5%)","quantiles (10%)","quantiles (15%)","quantiles (20%)","quantiles (25%)","quantiles (30%)","quantiles (35%)",
+                       "pred. residuals (75%)","pred. residuals (60%)","pred. residuals (50%)","conf. residuals (99%)","conf. residuals (95%)",
+                       "cred. 99.9%","cred. 99%","cred. 95%","cred. 90%","cred. 75%","cred. 50%",
+                       "2SD","1SD","0.5SD","Kmeans")
+
+
+# Reproductibility
+set.seed(42)
+
+df_perf_cv_pss_items <- estimation_classification_cv(
+  df = LORA_pss.r,
+  adversity_string = adversity_string,
+  outcome_string = outcome_string,
+  bins = bins_pss,
+  list_group_names = groups_to_test,
+  predictors = explication_vars_items,
+  k = 10
+)
+
+#Visualizations
+comparison_accuracy_null_model_classifier(df_perf_cv_pss_items)
+visualization_recall_precision(df_perf_cv_pss_items)
+
+# LORA - DH 
+# Residualization with DH
+df <- LORA_dh.r
+adversity_string <- "dh_sum"
+outcome_string <- "ghq_sum"
+outcome <- df$ghq_sum
+bins_dh <- c(0,76,151,226)
+
+#Classification test with DH
+# Reproductibility
+set.seed(42)
+
+# CV
+df_perf_cv_dh_items <- estimation_classification_cv(
   df = LORA_dh.r,
   adversity_string = adversity_string,
   outcome_string = outcome_string,
   bins = bins_dh,
   list_group_names = groups_to_test,
-  predictors = explication_vars_LORA,
+  predictors = explication_vars_items,
   k = 10
 )
 
-#Visualization
-# Test and train 42
-comparison_accuracy_null_model_classifier(df_perf_classification_tree42_dh)
-visualization_recall_precision(df_perf_classification_tree42_dh)
-# CV
-comparison_accuracy_null_model_classifier(df_perf_cv_dh)
-visualization_recall_precision(df_perf_cv_dh)
-# Binary CV
-comparison_accuracy_null_model_classifier(df_perf_binary_cv_dh)
 
+#Visualization
+comparison_accuracy_null_model_classifier(df_perf_cv_dh_items)
+visualization_recall_precision(df_perf_cv_dh_items)
 
