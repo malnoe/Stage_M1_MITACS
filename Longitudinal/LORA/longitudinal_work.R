@@ -247,10 +247,8 @@ ggplot(df_long, aes(x = PIP, y = percentage, color = group)) +
   ylim(0, 100) +
   theme_minimal()
 
-## Visualization ####
-visualization_longitudinal <- function(df, ranef_summary, posterior_summary, PIP_threshold) {
-  library(dplyr)
-  library(ggplot2)
+## Visualization basic with all individuals ####
+visualization_longitudinal <- function(df, ranef_summary, posterior_summary, PIP_threshold,type="PSS") {
   
   # Create table for random effects
   id_list <- unique(df$id)
@@ -277,6 +275,82 @@ visualization_longitudinal <- function(df, ranef_summary, posterior_summary, PIP
   min_positive_theta <- min(ranef_df$Post.mean[ranef_df$PIP >= PIP_threshold & ranef_df$Post.mean > 0], na.rm = TRUE)
   max_negative_theta <- max(ranef_df$Post.mean[ranef_df$PIP >= PIP_threshold & ranef_df$Post.mean < 0], na.rm = TRUE)
   
+  if(type=="PSS"){
+    # Plot
+    ggplot(data = d_plot, aes(x = week, y = residuals_ghq_pss, group = id, color = class)) +
+      geom_line(alpha = 0.15) +
+      geom_point(size = 0.5, alpha = 0.7) +
+      
+      # Horizontal lines
+      geom_hline(yintercept = alpha, linetype = "dashed", color = "black", size = 0.6) +
+      geom_hline(yintercept = min_positive_theta, linetype = "dotted", color = "firebrick", size = 0.6) +
+      geom_hline(yintercept = max_negative_theta, linetype = "dotted", color = "steelblue", size = 0.6) +
+      
+      # Annotations for horizontal lines
+      annotate("text", x = Inf, y = alpha, label = paste0("Intercept (α = ", round(alpha, 2), ")"),
+               hjust = 1.1, vjust = -0.5, color = "black", size = 3) +
+      
+      annotate("text", x = Inf, y = min_positive_theta,
+               label = paste0("Min θ (vulnerable) = ", round(min_positive_theta, 2)),
+               hjust = 1.1, vjust = -0.5, color = "firebrick", size = 3) +
+      
+      annotate("text", x = Inf, y = max_negative_theta,
+               label = paste0("Max θ (resilient) = ", round(max_negative_theta, 2)),
+               hjust = 1.1, vjust = 1.5, color = "steelblue", size = 3) +
+      
+      scale_color_manual(values = c(
+        "Average" = "gray80",
+        "Resilient" = "steelblue",
+        "Vulnerable" = "firebrick"
+      )) +
+      
+      labs(
+        x = "Week",
+        y = "Residuals",
+        color = "Class",
+        title = "Residuals over time by individual",
+        subtitle = paste0("Colored only for PIP ≥ ", PIP_threshold)
+      ) +
+      theme_minimal() 
+  }
+  else{
+    # Plot
+    ggplot(data = d_plot, aes(x = week, y = residuals_ghq_dh, group = id, color = class)) +
+      geom_line(alpha = 0.15) +
+      geom_point(size = 0.5, alpha = 0.7) +
+      
+      # Horizontal lines
+      geom_hline(yintercept = alpha, linetype = "dashed", color = "black", size = 0.6) +
+      geom_hline(yintercept = min_positive_theta, linetype = "dotted", color = "firebrick", size = 0.6) +
+      geom_hline(yintercept = max_negative_theta, linetype = "dotted", color = "steelblue", size = 0.6) +
+      
+      # Annotations for horizontal lines
+      annotate("text", x = Inf, y = alpha, label = paste0("Intercept (α = ", round(alpha, 2), ")"),
+               hjust = 1.1, vjust = -0.5, color = "black", size = 3) +
+      
+      annotate("text", x = Inf, y = min_positive_theta,
+               label = paste0("Min θ (vulnerable) = ", round(min_positive_theta, 2)),
+               hjust = 1.1, vjust = -0.5, color = "firebrick", size = 3) +
+      
+      annotate("text", x = Inf, y = max_negative_theta,
+               label = paste0("Max θ (resilient) = ", round(max_negative_theta, 2)),
+               hjust = 1.1, vjust = 1.5, color = "steelblue", size = 3) +
+      
+      scale_color_manual(values = c(
+        "Average" = "gray80",
+        "Resilient" = "steelblue",
+        "Vulnerable" = "firebrick"
+      )) +
+      
+      labs(
+        x = "Week",
+        y = "Residuals",
+        color = "Class",
+        title = "Residuals over time by individual",
+        subtitle = paste0("Colored only for PIP ≥ ", PIP_threshold)
+      ) +
+      theme_minimal()
+  }
   # Plot
   ggplot(data = d_plot, aes(x = week, y = residuals_ghq_pss, group = id, color = class)) +
     geom_line(alpha = 0.15) +
@@ -318,12 +392,184 @@ visualization_longitudinal <- function(df, ranef_summary, posterior_summary, PIP
 # DH
 ranef_summary_DH <- ranef_summary(alpha_dh, ci = 0.95, digits = 2)
 posterior_sumarry_DH <- posterior_summary(alpha_dh, ci = 0.90, digits = 2)
-visualization_longitudinal(d,ranef_summary_DH,posterior_sumarry_DH,0.99)
+visualization_longitudinal(d,ranef_summary_DH,posterior_sumarry_DH,0.99,type="DH")
 # PSS
 ranef_summary_PSS <- ranef_summary(alpha_pss, ci = 0.95, digits = 2)
 posterior_sumarry_PSS <- posterior_summary(alpha_pss, ci = 0.90, digits = 2)
-visualization_longitudinal(d,ranef_summary_PSS,posterior_sumarry_PSS,0.99)
+visualization_longitudinal(d,ranef_summary_PSS,posterior_sumarry_PSS,0.99,type="PSS")
 
+## Visualization main trajectories with confidence intervals ####
+visualization_main_trajectories <- function(df, ranef_summary, posterior_summary, PIP_threshold,type="PSS"){
+  # Create table for random effects
+  id_list <- unique(df$id)
+  
+  ranef_df <- ranef_summary %>%
+    mutate(id = id_list) %>%
+    mutate(
+      class = case_when(
+        PIP < PIP_threshold ~ "Average",
+        PIP >= PIP_threshold & Post.mean < 0 ~ "Resilient",
+        PIP >= PIP_threshold & Post.mean > 0 ~ "Vulnerable",
+        TRUE ~ "Average"
+      )
+    )
+  
+  # Join with original data
+  d_plot <- df %>%
+    left_join(ranef_df, by = "id")
+  
+  # Get alpha (mean intercept)
+  alpha <- posterior_summary$Post.mean[1]
+  
+  # Mean trajectories with confidence intervals
+  if(type=="PSS"){
+    df_trajectories <- d_plot %>%
+      group_by(week, class) %>%
+      summarise(
+        value = mean(residuals_ghq_pss, na.rm = TRUE),
+        sd = sd(residuals_ghq_pss, na.rm = TRUE),
+        n = n(),
+        se = sd / sqrt(n),
+        lower = value - qt(0.975, df = n-1) * se,
+        upper = value + qt(0.975, df = n-1) * se,
+        .groups = "drop"
+      )
+  }
+  else{
+    df_trajectories <- d_plot %>%
+      group_by(week, class) %>%
+      summarise(
+        value = mean(residuals_ghq_dh, na.rm = TRUE),
+        sd = sd(residuals_ghq_pss, na.rm = TRUE),
+        n = n(),
+        se = sd / sqrt(n),
+        lower = value - qt(0.975, df = n-1) * se,
+        upper = value + qt(0.975, df = n-1) * se,
+        .groups = "drop"
+      )
+  }
+  
+  
+  # Plot
+  ggplot(data = df_trajectories, aes(x = week, y = value, color = class, fill = class)) +
+    geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, color = NA) +
+    geom_line(size = 0.8) +
+    geom_point(size = 1) +
+    
+    geom_hline(yintercept = alpha, linetype = "dashed", color = "black", size = 0.6) +
+    
+    scale_color_manual(values = c(
+      "Average" = "gray60",
+      "Resilient" = "steelblue",
+      "Vulnerable" = "firebrick"
+    )) +
+    scale_fill_manual(values = c(
+      "Average" = "gray80",
+      "Resilient" = "steelblue",
+      "Vulnerable" = "firebrick"
+    )) +
+    
+    labs(
+      x = "Week",
+      y = "Mean residuals",
+      color = "Class",
+      fill = "Class",
+      title = "Mean residuals over time by class",
+      subtitle = paste0("Class defined with PIP ≥ ", PIP_threshold)
+    ) +
+    theme_minimal()
+}
+visualization_main_trajectories(d,ranef_summary_PSS,posterior_sumarry_PSS,0.99,type="PSS")
+visualization_main_trajectories(d,ranef_summary_DH,posterior_sumarry_DH,0.99,type="DH")
+
+## Visualization main trajectories for multiple thresholds ####
+visualization_trajectories_multiple_thresholds <- function(df, ranef_summary, posterior_summary, thresholds, type ="PSS") {
+
+  id_list <- unique(df$id)
+  
+  all_trajectories <- lapply(thresholds, function(PIP_threshold) {
+    # Assign classes based on current threshold
+    ranef_df <- ranef_summary %>%
+      mutate(id = id_list) %>%
+      mutate(
+        class = case_when(
+          PIP < PIP_threshold ~ "Average",
+          PIP >= PIP_threshold & Post.mean < 0 ~ "Resilient",
+          PIP >= PIP_threshold & Post.mean > 0 ~ "Vulnerable",
+          TRUE ~ "Average"
+        )
+      )
+    
+    d_plot <- df %>%
+      left_join(ranef_df, by = "id")
+    
+    # Aggregate trajectories
+    if(type=="PSS"){
+      d_plot %>%
+        group_by(week, class) %>%
+        summarise(
+          value = mean(residuals_ghq_pss, na.rm = TRUE),
+          sd = sd(residuals_ghq_pss, na.rm = TRUE),
+          n = n(),
+          se = sd / sqrt(n),
+          lower = value - qt(0.975, df = n-1) * se,
+          upper = value +  qt(0.975, df = n-1) * se,
+          .groups = "drop"
+        ) %>%
+        mutate(PIP_threshold = PIP_threshold)
+    }
+    else{
+      d_plot %>%
+        group_by(week, class) %>%
+        summarise(
+          value = mean(residuals_ghq_dh, na.rm = TRUE),
+          sd = sd(residuals_ghq_pss, na.rm = TRUE),
+          n = n(),
+          se = sd / sqrt(n),
+          lower = value - qt(0.975, df = n-1) * se,
+          upper = value + qt(0.975, df = n-1) * se,
+          .groups = "drop"
+        ) %>%
+        mutate(PIP_threshold = PIP_threshold)
+    }
+  }) %>% bind_rows()
+  
+  alpha <- posterior_summary$Post.mean[1]
+  
+  # Plot
+  # Plot
+  ggplot(data = all_trajectories, aes(x = week, y = value, color = class, fill = class, linetype = as.factor(PIP_threshold), group = interaction(class, PIP_threshold))) +
+    geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.1, color = NA) +
+    geom_line(size = 0.8) +
+    geom_point(size = 0.8) +
+
+    scale_color_manual(values = c(
+      "Average" = "gray60",
+      "Resilient" = "steelblue",
+      "Vulnerable" = "firebrick"
+    )) +
+    scale_fill_manual(values = c(
+      "Average" = "gray80",
+      "Resilient" = "steelblue",
+      "Vulnerable" = "firebrick"
+    )) +
+    scale_linetype_manual(
+      values = c("solid", "dashed", "dotdash", "twodash")[1:length(thresholds)],
+      name = "PIP threshold"
+    ) +
+    
+    labs(
+      x = "Week",
+      y = "Mean residuals",
+      color = "Class",
+      fill = "Class",
+      title = "Mean residual trajectories by class for multiple PIP thresholds",
+      linetype = "PIP threshold"
+    ) +
+    theme_minimal()
+}
+visualization_trajectories_multiple_thresholds(d,ranef_summary_PSS,posterior_sumarry_PSS,list(0.70,0.8,0.9),type="PSS")
+visualization_trajectories_multiple_thresholds(d,ranef_summary_DH,posterior_sumarry_DH,list(0.70,0.8,0.9),type="DH")
 
 ## SaS : Intercept and slope -> beta ####
 ## Week but the spike and slab is only on the slope
