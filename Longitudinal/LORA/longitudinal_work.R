@@ -160,6 +160,8 @@ for(adversity in c("pss_sum","dh_sum")){
   }
 }
 
+View(d)
+
 
 ## SaS : Intercept only -> alpha ####
 
@@ -244,6 +246,85 @@ ggplot(df_long, aes(x = PIP, y = percentage, color = group)) +
        color = "Group") +
   ylim(0, 100) +
   theme_minimal()
+
+## Visualization ####
+visualization_longitudinal <- function(df, ranef_summary, posterior_summary, PIP_threshold) {
+  library(dplyr)
+  library(ggplot2)
+  
+  # Create table for random effects
+  id_list <- unique(df$id)
+  
+  ranef_df <- ranef_summary %>%
+    mutate(id = id_list) %>%
+    mutate(
+      class = case_when(
+        PIP < PIP_threshold ~ "Average",
+        PIP >= PIP_threshold & Post.mean < 0 ~ "Resilient",
+        PIP >= PIP_threshold & Post.mean > 0 ~ "Vulnerable",
+        TRUE ~ "Average"
+      )
+    )
+  
+  # Join with original data
+  d_plot <- df %>%
+    left_join(ranef_df, by = "id")
+  
+  # Get alpha (mean intercept)
+  alpha <- posterior_summary$Post.mean[1]
+  
+  # Get minimal effect sizes selected by spike-and-slab
+  min_positive_theta <- min(ranef_df$Post.mean[ranef_df$PIP >= PIP_threshold & ranef_df$Post.mean > 0], na.rm = TRUE)
+  max_negative_theta <- max(ranef_df$Post.mean[ranef_df$PIP >= PIP_threshold & ranef_df$Post.mean < 0], na.rm = TRUE)
+  
+  # Plot
+  ggplot(data = d_plot, aes(x = week, y = residuals_ghq_pss, group = id, color = class)) +
+    geom_line(alpha = 0.15) +
+    geom_point(size = 0.5, alpha = 0.7) +
+    
+    # Horizontal lines
+    geom_hline(yintercept = alpha, linetype = "dashed", color = "black", size = 0.6) +
+    geom_hline(yintercept = min_positive_theta, linetype = "dotted", color = "firebrick", size = 0.6) +
+    geom_hline(yintercept = max_negative_theta, linetype = "dotted", color = "steelblue", size = 0.6) +
+    
+    # Annotations for horizontal lines
+    annotate("text", x = Inf, y = alpha, label = paste0("Intercept (α = ", round(alpha, 2), ")"),
+             hjust = 1.1, vjust = -0.5, color = "black", size = 3) +
+    
+    annotate("text", x = Inf, y = min_positive_theta,
+             label = paste0("Min θ (vulnerable) = ", round(min_positive_theta, 2)),
+             hjust = 1.1, vjust = -0.5, color = "firebrick", size = 3) +
+    
+    annotate("text", x = Inf, y = max_negative_theta,
+             label = paste0("Max θ (resilient) = ", round(max_negative_theta, 2)),
+             hjust = 1.1, vjust = 1.5, color = "steelblue", size = 3) +
+    
+    scale_color_manual(values = c(
+      "Average" = "gray80",
+      "Resilient" = "steelblue",
+      "Vulnerable" = "firebrick"
+    )) +
+    
+    labs(
+      x = "Week",
+      y = "Residuals",
+      color = "Class",
+      title = "Residuals over time by individual",
+      subtitle = paste0("Colored only for PIP ≥ ", PIP_threshold)
+    ) +
+    theme_minimal()
+}
+
+# DH
+ranef_summary_DH <- ranef_summary(alpha_dh, ci = 0.95, digits = 2)
+posterior_sumarry_DH <- posterior_summary(alpha_dh, ci = 0.90, digits = 2)
+visualization_longitudinal(d,ranef_summary_DH,posterior_sumarry_DH,0.99)
+# PSS
+ranef_summary_PSS <- ranef_summary(alpha_pss, ci = 0.95, digits = 2)
+posterior_sumarry_PSS <- posterior_summary(alpha_pss, ci = 0.90, digits = 2)
+visualization_longitudinal(d,ranef_summary_PSS,posterior_sumarry_PSS,0.99)
+
+
 ## SaS : Intercept and slope -> beta ####
 ## Week but the spike and slab is only on the slope
 # GHQ~PSS

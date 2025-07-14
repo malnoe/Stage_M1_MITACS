@@ -3,6 +3,7 @@
 ## Packages ####
 library(dplyr) # dataframe managment
 library(ggplot2) # ploting
+library(ggrepel)
 library(car)  # For VIF
 library(caret)  # for createFolds
 library(randomForest)
@@ -23,7 +24,6 @@ df_CA <- RYSE_master_dataset[RYSE_master_dataset$Country==1,]
 df_SA <- RYSE_master_dataset[RYSE_master_dataset$Country==2 
                              & RYSE_master_dataset$Site != 4,] # we exclude Zamdela
 
-bins_BDI_II <- c(0,14,20,29,64)
 
 ## Adjusted fit function ####
 # Function for adjusted linear regression using influencial statistics
@@ -34,6 +34,7 @@ bins_BDI_II <- c(0,14,20,29,64)
 # lm_ajusted_cred : adjusted linear regression using bayesian regression
 # residuals_adjusted : residuals of the adjusted linear regression
 adjusted_fit <- function(df,adversity,outcome,main="Adjusted and unadjusted linear regression",xlab="Adversity",ylab="Outcome"){
+  rownames(df) <- NULL
   
   # Unadjusted linear model
   lm_unadjusted <- lm(as.formula(paste(outcome, "~", adversity)), data = df)
@@ -59,9 +60,12 @@ adjusted_fit <- function(df,adversity,outcome,main="Adjusted and unadjusted line
   
   # Plot
   # Influencer binary value to plot
+  influencer_flags <- rep(FALSE, nrow(df))
+  influencer_flags[original_indices] <- TRUE
+  
   df_plot <- df %>%
-    mutate(influencer = FALSE)
-  df_plot$influencer[original_indices] <- TRUE
+    mutate(influencer = influencer_flags)
+  
   
   # Lines
   lines_df <- data.frame(
@@ -181,11 +185,11 @@ visualization_raw_residuals <- function(df, adversity, outcome, adjusted_lm, gro
 
 
 ## Confidence / Prediction / Credibility intervals approach  ####
-get_credibility_intervals <- function(lm_adjusted_cred,newdata,lwr=0.025,upr=0.975){
+get_credibility_intervals <- function(lm_adjusted_cred,newdata,adversity_string,lwr=0.025,upr=0.975){
   
   # Posterior linear prediction
   preds <- posterior_linpred(lm_adjusted_cred,
-                             newdata = newdata[!is.na(newdata[,c(adversity_string)]),],
+                             newdata = newdata[!is.na(newdata[[adversity_string]]), , drop = FALSE],
                              draws = 1000,
                              transform = TRUE)
   
@@ -341,7 +345,13 @@ get_sd_in_bins <- function(data_training, lm, bins,multiplicator,outcome_string,
     in_bin <- df[[adversity_string]] >= bins[i] & df[[adversity_string]] < bins[i + 1]
     
     residuals_bin <- residuals[in_bin]
-    res_SD[i] <- sd(residuals_bin, na.rm = TRUE)*multiplicator
+    if(length(residuals_bin)>0){
+      res_SD[i] <- sd(residuals_bin, na.rm = TRUE)*multiplicator
+    }
+    else{
+      res_SD[i] <- 0
+    }
+    
   }
   return(res_SD)
 }
@@ -574,7 +584,7 @@ visualization_groups <- function(df,adversity,outcome,adjusted_lm,groups,main="C
 ## Get all groups ####
 
 # Function to get a dataframe with all of the grouping methods result and the dataframe with the sizes of each group for each method
-get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualization=TRUE){
+get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualization=TRUE,xlab="Adversity",ylab="Outcome"){
   
   # Get the info about the lm
   lm_adjusted <- res$lm_adjusted
@@ -596,7 +606,7 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
   df_result[["raw"]] <- groups_raw
   
   if(visualization){
-    print(visualization_raw_residuals(df,adversity_string,outcome_string,lm_adjusted,groups_raw,xlab="BDI-II score",ylab="Engagement"))
+    print(visualization_raw_residuals(df,adversity_string,outcome_string,lm_adjusted,groups_raw,xlab=xlab,ylab=ylab))
   }
   
   # Prediction and confidence intervals
@@ -639,17 +649,17 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
       as.data.frame(cbind(x_grid, as.data.frame(predict(lm_adjusted, newdata = x_grid, interval = "confidence", level = 0.95))))
     )
 
-    print(visualization_intervals(df=df,adversity=adversity_string,outcome=outcome_string,adjusted_lm =lm_adjusted,preds_conf2,names_conf,main="Confidence and prediction intervals",xlab="BDI-II score",ylab="Engagement"))
+    print(visualization_intervals(df=df,adversity=adversity_string,outcome=outcome_string,adjusted_lm =lm_adjusted,preds_conf2,names_conf,main="Confidence and prediction intervals",xlab=xlab,ylab=ylab))
   }
   
   
   # Credibility intervals
-  preds_cred <- list(as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.0005,upr=0.9995))),
-                     as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.005,upr=0.995))),
-                     as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.025,upr=0.975))),
-                     as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.05,upr=0.95))),
-                     as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.125,upr=0.875))),
-                     as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df[c(adversity_string)],lwr=0.25,upr=0.75)))
+  preds_cred <- list(as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df,adversity_string,lwr=0.0005,upr=0.9995))),
+                     as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df,adversity_string,lwr=0.005,upr=0.995))),
+                     as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df,adversity_string,lwr=0.025,upr=0.975))),
+                     as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df,adversity_string,lwr=0.05,upr=0.95))),
+                     as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df,adversity_string,lwr=0.125,upr=0.875))),
+                     as.data.frame(cbind(df[c(adversity_string)],get_credibility_intervals(lm_adjusted_cred,newdata=df,adversity_string,lwr=0.25,upr=0.75)))
     
 )
   names_cred <- list(
@@ -668,7 +678,23 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
   }
   
   if(visualization){
-    print(visualization_intervals(df=df,adversity=adversity_string,outcome=outcome_string,adjusted_lm =lm_adjusted_cred,preds_cred,names_cred,main="Credibility intervals",xlab="BDI-II score",ylab="Engagement"))
+    # Create grid of adversity scores for smooth prediction
+    x_grid <- data.frame(adversity_var = seq(min(df[[adversity_string]], na.rm = TRUE),
+                                             max(df[[adversity_string]], na.rm = TRUE),
+                                             length.out = 200))
+    
+    # Rename column to match what the model expects
+    colnames(x_grid) <- adversity_string
+    
+    # Generate predictions over the grid
+    preds_cred2 <- list(as.data.frame(cbind(x_grid,get_credibility_intervals(lm_adjusted_cred,newdata=x_grid,adversity_string,lwr=0.0005,upr=0.9995))),
+                       as.data.frame(cbind(x_grid,get_credibility_intervals(lm_adjusted_cred,newdata=x_grid,adversity_string,lwr=0.005,upr=0.995))),
+                       as.data.frame(cbind(x_grid,get_credibility_intervals(lm_adjusted_cred,newdata=x_grid,adversity_string,lwr=0.025,upr=0.975))),
+                       as.data.frame(cbind(x_grid,get_credibility_intervals(lm_adjusted_cred,newdata=x_grid,adversity_string,lwr=0.05,upr=0.95))),
+                       as.data.frame(cbind(x_grid,get_credibility_intervals(lm_adjusted_cred,newdata=x_grid,adversity_string,lwr=0.125,upr=0.875))),
+                       as.data.frame(cbind(x_grid,get_credibility_intervals(lm_adjusted_cred,newdata=x_grid,adversity_string,lwr=0.25,upr=0.75)))
+    )
+    print(visualization_intervals(df=df,adversity=adversity_string,outcome=outcome_string,adjusted_lm =lm_adjusted_cred,preds_cred2,names_cred,main="Credibility intervals",xlab=xlab,ylab=ylab))
   }
   
   # Quantiles
@@ -704,7 +730,7 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
     df_result[[names_sd[[i]]]] <- groups
   }
   if(visualization){
-    print(visualization_sd_intervals(df,adversity=adversity_string,outcome=outcome_string,adjusted_lm=lm_adjusted,bins=bins,res=res_sd,names_sd=names_sd,main="SD Intervals",xlab="BDI-II score",ylab="Engagement"))
+    print(visualization_sd_intervals(df,adversity=adversity_string,outcome=outcome_string,adjusted_lm=lm_adjusted,bins=bins,res=res_sd,names_sd=names_sd,main="SD Intervals",xlab=xlab,ylab=ylab))
   }
   
   # Kmeans (only residuals)
@@ -714,7 +740,7 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
                        data.frame(resilient = sum(groups_kmeans=="resilient", na.rm=TRUE), average = sum(groups_kmeans=="average", na.rm=TRUE), vulnerable = sum(groups_kmeans=="vulnerable", na.rm=TRUE), row.names=c("Kmeans")))
   df_result[["Kmeans"]] <- groups_kmeans
   if(visualization){
-    print(visualization_groups(df,adversity_string,outcome_string,lm_adjusted,groups_kmeans,main="Groups using k-means algorithm",xlab="BDI-II score",ylab="Engagement"))
+    print(visualization_groups(df,adversity_string,outcome_string,lm_adjusted,groups_kmeans,main="Groups using k-means algorithm",xlab=xlab,ylab=ylab))
   }
   
   return(list(df_result=df_result,df_n_groups=df_n_groups))
@@ -729,7 +755,8 @@ explication_vars <- c("T1_Sex","T1_Age",paste0("T1_CYRM_", 1:28),paste0("T1_PoNS
 #explication_vars <- c("T1_Sex","T1_Age","T1_CYRM28_total","T1_PoNS","T1_SF_14_PHC","T1_CPTS","T1_FAS","T1_BCE")
 
 # Dataframe with SES or WES + pertinent variables
-df_SAr <- df_SA[(!is.na(df_SA$T1_SES_total_SA)|!is.na(df_SA$T1_WES_total)) & !is.na(df_SA$T1_BDI_II),c(residuals_vars,explication_vars,"Master_ID")]
+df_SAr <- df_SA[(!is.na(df_SA$T1_SES_total_SA) | !is.na(df_SA$T1_WES_total)) & !is.na(df_SA$T1_BDI_II),
+                c(residuals_vars, explication_vars)]
 dim(df_SAr) # 423 individuals
 
 # Suppr individuals with over 30% of missing data
@@ -744,29 +771,33 @@ df_SAr_wtWESSES.mf <- missForest::missForest(xmis = df_SAr_wtWESSES)
 df_SAr[,explication_vars] <- df_SAr_wtWESSES.mf$ximp
 
 # Creation of the engagement variable
-n <- nrow(df_SAr)
-for(i in 1:n){
-  if(is.na(df_SAr[i,"T1_WES_total"])){
-    df_SAr[i,"T1_Engagement"] <- (df_SAr[i,"T1_SES_total_SA"]-33)/(165-33)*100
-  }
-  else if(is.na(df_SAr[i,"T1_SES_total_SA"])){
-    df_SAr[i,"T1_Engagement"] <- (df_SAr[i,"T1_WES_total"]-9)/(63-9)*100
-  }
-  else{# If both are not NA
-    if(df_SAr[i,"T1_edu_1a"] %in% 9:12){
-      df_SAr[i,"T1_Engagement"] <- (df_SAr[i,"T1_SES_total_SA"]-33)/(165-33)*100
-    }
-    else{
-      df_SAr[i,"T1_Engagement"] <- (df_SAr[i,"T1_SES_total_SA"]-33)/(165-33)*100
-    }
-  }
-}
+df_SAr$T1_Engagement <- NA
+
+# Use SES if we don't have WES
+use_SES <- is.na(df_SAr$T1_WES_total)
+df_SAr$T1_Engagement[use_SES] <- (df_SAr$T1_SES_total_SA[use_SES] - 33)/(165 - 33) * 100
+
+# Use WES if we don't have SES
+use_WES <- is.na(df_SAr$T1_SES_total_SA)
+df_SAr$T1_Engagement[use_WES] <- (df_SAr$T1_WES_total[use_WES] - 9)/(63 - 9) * 100
+
+# Then the remaning have both, we look is they are in grade 9->12
+use_SES <- is.na(df_SAr$T1_Engagement) & df_SAr$T1_edu_1a %in% 9:12
+df_SAr$T1_Engagement[use_SES] <- (df_SAr$T1_SES_total_SA[use_SES] - 33)/(165 - 33) * 100
+
+# The remaning we take WES
+use_WES <- is.na(df_SAr$T1_Engagement)
+df_SAr$T1_Engagement[use_WES] <- (df_SAr$T1_WES_total[use_WES] - 9)/(63 - 9) * 100
+
+
+df_SAr <- df_SAr[,c("T1_Engagement","T1_BDI_II",explication_vars)]
 
 df <- df_SAr
 adversity_string <- "T1_BDI_II"
 outcome_string <- "T1_Engagement"
-outcome <- df$T1_Engagement
+bins_BDI_II <- c(0,14,20,29,64)
 bins <- bins_BDI_II
+outcome <- df$T1_Engagement
 res <- adjusted_fit(df_SAr,adversity="T1_BDI_II",outcome="T1_Engagement",main="Adjusted and unadjusted linear regression of Engagement (work or school) with BDI-II score",xlab="BDI-II score",ylab="Engagement")
 
 #lm_adjusted <- res$lm_adjusted
@@ -961,6 +992,9 @@ estimation_classification_cv <- function(df, adversity_string, outcome_string, b
       train_data <- df[-test_indices, ]
       test_data  <- df[test_indices, ]
       
+      # Avoid crashing
+      train_data$groups <- factor(train_data$groups, levels = levels(df$groups))
+
       # Fit random forest
       formula <- as.formula(paste("groups ~", paste(predictors, collapse = " + ")))
       rf_model <- randomForest(formula, data = train_data, ntree = 500, mtry = floor(sqrt(length(predictors))), importance = FALSE)
@@ -1036,6 +1070,10 @@ estimation_classification_binary_cv <- function(df, adversity_string, outcome_st
       train_data <- df[-test_indices, ]
       test_data  <- df[test_indices, ]
       
+      # Avoid crash <3
+      train_data$groups <- factor(train_data$groups, levels = levels(df$groups))
+      
+      
       # Train RF
       formula <- as.formula(paste("groups ~", paste(predictors, collapse = " + ")))
       rf_model <- randomForest(formula, data = train_data, ntree = 1000, mtry = floor(sqrt(length(predictors))), importance = FALSE)
@@ -1079,11 +1117,51 @@ estimation_classification_binary_cv <- function(df, adversity_string, outcome_st
   return(res)
 }
 
+## Visualization of classification results functions ####
+comparison_accuracy_null_model_classifier <- function(df_perf){
+  df_long <- df_perf %>%
+    pivot_longer(cols = c(accuracy, null_model),
+                 names_to = "metric",
+                 values_to = "value") %>%
+    mutate(metric = dplyr::recode(metric,
+                                  accuracy = "Classifier",
+                                  null_model = "Null model"))
+  
+  plot<- ggplot(df_long, aes(x = support_average, y = value, color = metric)) +
+    geom_line(linewidth = 1) +
+    geom_point() +
+    labs(title = "Accuracy of the classifier vs accuracy of the null model as a function of the average group size",
+         x = "Average group size",
+         y = "Accuracy",
+         color = "Metric",
+         size=15) +
+    xlim(0, max(df_perf$support_average)) +
+    ylim(0, 1) +
+    theme_minimal()+
+    theme(legend.text = element_text(size = 12),
+          legend.title = element_text(size = 12))
+  
+  return(plot)
+}
+visualization_recall_precision <- function(df_perf){
+  criteria_index <- df_perf$support_average>=df_perf$support_resilient & df_perf$support_average>=df_perf$support_vulnerable & df_perf$recall_resilient>0.0001 & df_perf$precision_resilient>0.0001
+  df_perf_class_comparison <- df_perf[criteria_index,]
+  
+  ggplot(df_perf_class_comparison,aes(x=1-recall_resilient,y=precision_resilient,label=group_name))+
+    geom_point(shape=19,size=1.5)+
+    ggrepel::geom_text_repel(size = 3, max.overlaps = Inf, box.padding = 0.3, point.padding = 0.2)+
+    xlim(0,1.2)+
+    ylim(0,1)+
+    labs(title="Comparison of the grouping methods",
+         x="1- recall of the resilient group",
+         y= "precision of the resilient group")+
+    theme_minimal()
+}
+
 ## Commands for the classification ####
-groups_to_test <- list("quantiles (5%)","quantiles (10%)","quantiles (15%)","quantiles (20%)","quantiles (25%)","quantiles (30%)","quantiles (35%)",
+groups_to_test <- list("2SD","1SD","0.5SD","quantiles (5%)","quantiles (10%)","quantiles (15%)","quantiles (20%)","quantiles (25%)","quantiles (30%)","quantiles (35%)",
                        "pred. residuals (75%)","pred. residuals (60%)","pred. residuals (50%)","conf. residuals (99%)","conf. residuals (95%)",
-                       "cred. 99.9%","cred. 99%","cred. 95%","cred. 90%","cred. 75%","cred. 50%",
-                       "2SD","1SD","0.5SD","Kmeans")
+                       "cred. 99.9%","cred. 99%","cred. 95%","cred. 90%","cred. 75%","cred. 50%","Kmeans")
 
 
 # Reproductibility
@@ -1116,52 +1194,114 @@ df_perf_binary_cv <- estimation_classification_binary_cv(
   k = 10
 )
 
+# Test and train 42
+comparison_accuracy_null_model_classifier(df_perf_classification_tree42)
+visualization_recall_precision(df_perf_classification_tree42)
+# CV
+comparison_accuracy_null_model_classifier(df_perf_cv)
+visualization_recall_precision(df_perf_cv)
+# Binary CV
+comparison_accuracy_null_model_classifier(df_perf_binary_cv)
 
 
-#Visualization evolution of the null model and classifier accuracy as a function of the size of the average group
-df_long <- df_perf_classification_tree42 %>%
-  pivot_longer(cols = c(accuracy, null_model),
-               names_to = "metric",
-               values_to = "value") %>%
-  mutate(metric = dplyr::recode(metric,
-                                accuracy = "Classifier",
-                                null_model = "Null model"))
+## Command classification on sums ####
+# Variables used
+residuals_vars <- c("T1_SES_total_SA","T1_WES_total", "T1_BDI_II","T1_edu_1a")
+explication_vars_sum <- c("T1_Sex","T1_Age","T1_CYRM28_total","T1_PoNS","T1_SF_14_PHC","T1_CPTS","T1_FAS","T1_BCE")
 
-ggplot(df_long, aes(x = support_average, y = value, color = metric)) +
-  geom_line(linewidth = 1) +
-  geom_point() +
-  labs(title = "Accuracy of the classifier vs accuracy of the null model as a function of the average group size",
-       x = "Average group size",
-       y = "Accuracy",
-       color = "Metric",
-       size=15) +
-  xlim(0, 130) +
-  ylim(0, 1) +
-  theme_minimal()+
-  theme(legend.text = element_text(size = 12),
-        legend.title = element_text(size = 12))
+# Dataframe with SES or WES + pertinent variables
+df_SAr_sum <- df_SA[(!is.na(df_SA$T1_SES_total_SA) | !is.na(df_SA$T1_WES_total)) & !is.na(df_SA$T1_BDI_II),
+                    c(residuals_vars, explication_vars_sum)]
+dim(df_SAr_sum) # 423 individuals
 
-# Selection of the best grouping methods 
-# Criterias :
-# The average group size is at least 1/3 of the whole dataset -> >129/3=
-# The model as to predict (rightfully or wrongfully) resilience -> recall >0
-# We want good precision and in second a good recall for the resilient group.
-criteria_index <- df_perf_classification_tree42$support_average>=df_perf_classification_tree42$support_resilient&df_perf_classification_tree42$support_average>=df_perf_classification_tree42$support_vulnerable&df_perf_classification_tree42$recall_resilient>0.0001&df_perf_classification_tree42$precision_resilient>0.0001
-df_perf_class_comparison <- df_perf_classification_tree42[criteria_index,]
+# Suppr individuals with over 30% of missing data
+indices <- which(rowMeans(is.na(df_SAr_sum)) > 0.3)
+df_SAr_sum <- df_SAr_sum[-indices,]
+dim(df_SAr_sum)
 
-ggplot(df_perf_class_comparison,aes(x=1-recall_resilient,y=precision_resilient,label=group_name))+
-  geom_point(shape=19,size=1.5)+
-  geom_text(hjust=-0.1, vjust=0,size=3)+
-  xlim(0,1)+
-  ylim(0,1)+
-  labs(title="Comparison of the grouping methods",
-       x="1- recall of the resilient group",
-       y= "precision of the resilient group")+
-  theme_minimal()
+# Impute data 
+df_SAr_wtWESSES_sum <- df_SAr_sum[explication_vars_sum]
+df_SAr_wtWESSES_sum <- as.data.frame(lapply(df_SAr_wtWESSES_sum, function(x) as.numeric(as.character(x))))
+df_SAr_wtWESSES.mf_sum <- missForest::missForest(xmis = df_SAr_wtWESSES_sum)
+df_SAr_sum[,explication_vars_sum] <- df_SAr_wtWESSES.mf_sum$ximp
 
+# Creation of the engagement variable
+df_SAr_sum$T1_Engagement <- NA
+
+# Use SES if we don't have WES
+use_SES <- is.na(df_SAr_sum$T1_WES_total)
+df_SAr_sum$T1_Engagement[use_SES] <- (df_SAr_sum$T1_SES_total_SA[use_SES] - 33)/(165 - 33) * 100
+
+# Use WES if we don't have SES
+use_WES <- is.na(df_SAr_sum$T1_SES_total_SA)
+df_SAr_sum$T1_Engagement[use_WES] <- (df_SAr_sum$T1_WES_total[use_WES] - 9)/(63 - 9) * 100
+
+# Then the remaning have both, we look is they are in grade 9->12
+use_SES <- is.na(df_SAr_sum$T1_Engagement) & df_SAr_sum$T1_edu_1a %in% 9:12
+df_SAr_sum$T1_Engagement[use_SES] <- (df_SAr_sum$T1_SES_total_SA[use_SES] - 33)/(165 - 33) * 100
+
+# The remaning we take WES
+use_WES <- is.na(df_SAr_sum$T1_Engagement)
+df_SAr_sum$T1_Engagement[use_WES] <- (df_SAr_sum$T1_WES_total[use_WES] - 9)/(63 - 9) * 100
 
 
-## LORA Cross-sectional ####
+df_SAr_sum <- df_SAr_sum[,c("T1_Engagement","T1_BDI_II",explication_vars_sum)]
+
+adversity_string <- "T1_BDI_II"
+outcome_string <- "T1_Engagement"
+bins_BDI_II <- c(0,14,20,29,64)
+bins <- bins_BDI_II
+
+groups_to_test <- list("2SD","1SD","0.5SD","quantiles (5%)","quantiles (10%)","quantiles (15%)","quantiles (20%)","quantiles (25%)","quantiles (30%)","quantiles (35%)",
+                       "pred. residuals (75%)","pred. residuals (60%)","pred. residuals (50%)","conf. residuals (99%)","conf. residuals (95%)",
+                       "cred. 99.9%","cred. 99%","cred. 95%","cred. 90%","cred. 75%","cred. 50%",
+                       "Kmeans")
+
+
+# Reproductibility
+set.seed(42)
+
+#use 70% of dataset as training set and 30% as test set
+sample <- sample(c(TRUE, FALSE), nrow(df_SAr_sum), replace=TRUE, prob=c(0.7,0.3))
+df_train_sum <- df_SAr_sum[sample, ]
+df_test_sum <- df_SAr_sum[!sample, ]
+
+df_perf_classification_tree42_sum <- estimation_classification(df_train_sum,df_test_sum,adversity_string,outcome_string,bins,groups_to_test,predictors = explication_vars_sum)
+
+df_perf_cv_sum <- estimation_classification_cv(
+  df = df_SAr_sum,
+  adversity_string = adversity_string,
+  outcome_string = outcome_string,
+  bins = bins,
+  list_group_names = groups_to_test,
+  predictors = explication_vars_sum,
+  k = 10
+)
+
+df_perf_binary_cv_sum <- estimation_classification_binary_cv(
+  df = df_SAr_sum,
+  adversity_string = adversity_string,
+  outcome_string = outcome_string,
+  bins = bins,
+  list_group_names = groups_to_test,
+  predictors = explication_vars_sum,
+  k = 10
+)
+
+# Test and train 42
+comparison_accuracy_null_model_classifier(df_perf_classification_tree42_sum)
+visualization_recall_precision(df_perf_classification_tree42_sum)
+# CV
+comparison_accuracy_null_model_classifier(df_perf_cv_sum)
+visualization_recall_precision(df_perf_cv_sum)
+# Binary CV
+comparison_accuracy_null_model_classifier(df_perf_binary_cv_sum)
+
+
+
+
+
+## LORA Data Cleaning ####
 
 # Get the data
 df_LORA <- readRDS("C:/Users/garan/Documents/Ecole/M1/Stage/Internship_repo/Longitudinal/LORA/ds_forJan.rds")
@@ -1281,19 +1421,122 @@ LORA_pss.r <- LORA_pss.mf$ximp
 LORA_dh.mf <- missForest::missForest(xmis = LORAdh)
 LORA_dh.r <- LORA_dh.mf$ximp
 
- 
+## LORA - PSS ####
 
+# Residualization with PSS
+df <- LORA_pss.r
+adversity_string <- "pss_sum"
+outcome_string <- "ghq_sum"
+outcome <- df$ghq_sum
+bins_pss <- c(0,14,26,40)
+res_pss <- adjusted_fit(df,adversity=adversity_string,outcome=outcome_string,main="Adjusted and unadjusted linear regression for GHQ~PSS",xlab="PSS",ylab="GHQ")
+
+
+all_groups_pss <- get_all_groups(df,adversity_string,outcome_string,bins,res_pss,visualization = TRUE)
+df_result_pss <- all_groups_pss$df_result
+df_n_groups_pss <- all_groups_pss$df_n_groups
+
+# Classification test with PSS
+groups_to_test <- list("quantiles (5%)","quantiles (10%)","quantiles (15%)","quantiles (20%)","quantiles (25%)","quantiles (30%)","quantiles (35%)",
+                       "pred. residuals (75%)","pred. residuals (60%)","pred. residuals (50%)","conf. residuals (99%)","conf. residuals (95%)",
+                       "cred. 99.9%","cred. 99%","cred. 95%","cred. 90%","cred. 75%","cred. 50%",
+                       "2SD","1SD","0.5SD","Kmeans")
+
+
+  # Reproductibility
+set.seed(42)
+
+  #use 70% of dataset as training set and 30% as test set
+sample <- sample(c(TRUE, FALSE), nrow(LORA_pss.r), replace=TRUE, prob=c(0.7,0.3))
+df_train_pss <- LORA_pss.r[sample, ]
+df_test_pss <- LORA_pss.r[!sample, ]
+
+df_perf_classification_tree42_pss <- estimation_classification(df_train_pss,df_test_pss,adversity_string,outcome_string,bins_pss,groups_to_test,predictors = explication_vars_LORA)
+
+df_perf_cv_pss <- estimation_classification_cv(
+  df = LORA_pss.r,
+  adversity_string = adversity_string,
+  outcome_string = outcome_string,
+  bins = bins_pss,
+  list_group_names = groups_to_test,
+  predictors = explication_vars_LORA,
+  k = 2
+)
+
+df_perf_binary_cv_pss <- estimation_classification_binary_cv(
+  df = LORA_pss.r,
+  adversity_string = adversity_string,
+  outcome_string = outcome_string,
+  bins = bins_pss,
+  list_group_names = groups_to_test,
+  predictors = explication_vars_LORA,
+  k = 10
+)
+
+#Visualizations
+# Test and train 42
+comparison_accuracy_null_model_classifier(df_perf_classification_tree42_pss)
+visualization_recall_precision(df_perf_classification_tree42_pss)
+# CV
+comparison_accuracy_null_model_classifier(df_perf_cv_pss)
+visualization_recall_precision(df_perf_cv_pss)
+# Binary CV
+comparison_accuracy_null_model_classifier(df_perf_binary_cv_pss)
+
+## LORA - DH ####
 # Residualization with DH
+df <- LORA_dh.r
+adversity_string <- "dh_sum"
+outcome_string <- "ghq_sum"
+outcome <- df$ghq_sum
+bins_dh <- c(0,76,151,226)
+res_dh <- adjusted_fit(df,adversity=adversity_string,outcome=outcome_string,main="Adjusted and unadjusted linear regression for GHQ~DH",xlab="DH",ylab="GHQ")
 
 
+all_groups_dh <- get_all_groups(df,adversity_string,outcome_string,bins_dh,res_dh,visualization = TRUE)
+df_result_dh <- all_groups_dh$df_result
+df_n_groups_dh <- all_groups_dh$df_n_groups
 
 
+#Classification test with DH
+# Reproductibility
+set.seed(42)
 
+#use 70% of dataset as training set and 30% as test set
+sample <- sample(c(TRUE, FALSE), nrow(LORA_dh.r), replace=TRUE, prob=c(0.7,0.3))
+df_train_dh <- LORA_dh.r[sample, ]
+df_test_dh <- LORA_dh.r[!sample, ]
 
+df_perf_classification_tree42_dh <- estimation_classification(df_train_dh,df_test_dh,adversity_string,outcome_string,bins_dh,groups_to_test,predictors = explication_vars_LORA)
 
+df_perf_cv_dh <- estimation_classification_cv(
+  df = LORA_dh.r,
+  adversity_string = adversity_string,
+  outcome_string = outcome_string,
+  bins = bins_dh,
+  list_group_names = groups_to_test,
+  predictors = explication_vars_LORA,
+  k = 10
+)
 
+df_perf_binary_cv_dh <- estimation_classification_binary_cv(
+  df = LORA_dh.r,
+  adversity_string = adversity_string,
+  outcome_string = outcome_string,
+  bins = bins_dh,
+  list_group_names = groups_to_test,
+  predictors = explication_vars_LORA,
+  k = 10
+)
 
-
-
+#Visualization
+# Test and train 42
+comparison_accuracy_null_model_classifier(df_perf_classification_tree42_dh)
+visualization_recall_precision(df_perf_classification_tree42_dh)
+# CV
+comparison_accuracy_null_model_classifier(df_perf_cv_dh)
+visualization_recall_precision(df_perf_cv_dh)
+# Binary CV
+comparison_accuracy_null_model_classifier(df_perf_binary_cv_dh)
 
 
