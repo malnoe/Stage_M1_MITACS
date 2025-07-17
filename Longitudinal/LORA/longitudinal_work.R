@@ -211,19 +211,30 @@ df_long <- pct_PIP_alpha_pss %>%
                names_to = "group",
                values_to = "percentage") %>%
   mutate(group = dplyr::recode(group,
-                        "pct_resilient" = "Resilient",
-                        "pct_vulnerable" = "Vulnerable",
-                        "pct_average" = "Average"))
+                               "pct_resilient" = "Resilient",
+                               "pct_vulnerable" = "Vulnerable",
+                               "pct_average" = "Average"))
 
 ggplot(df_long, aes(x = PIP, y = percentage, color = group)) +
-  geom_line(linewidth = 1) +
-  geom_point() +
+  geom_line(linewidth = 1.8) +
+  geom_point(size=2) +
   labs(title = "Group Proportions by PIP for GHQ~PSS",
        x = "PIP",
        y = "Percentage",
        color = "Group") +
   ylim(0, 100) +
-  theme_minimal()
+  scale_color_manual(values = c("Average" = "gray10",
+                                 "Resilient" = "gray40",
+                                 "Vulnerable" = "gray80")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16),
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 16),
+    axis.title = element_text(size = 16),
+    axis.text = element_text(size = 16)
+  )
+
 
 
 # DH
@@ -238,14 +249,24 @@ df_long <- pct_PIP_alpha_dh %>%
                         pct_average = "Average"))
 
 ggplot(df_long, aes(x = PIP, y = percentage, color = group)) +
-  geom_line(linewidth = 1) +
-  geom_point() +
+  geom_line(linewidth = 1.8) +
+  geom_point(size=2) +
   labs(title = "Group Proportions by PIP for GHQ~DH",
        x = "PIP",
        y = "Percentage",
        color = "Group") +
   ylim(0, 100) +
-  theme_minimal()
+  scale_color_manual(values = c("Average" = "gray10",
+                                "Resilient" = "gray40",
+                                "Vulnerable" = "gray80")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16),
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 16),
+    axis.title = element_text(size = 16),
+    axis.text = element_text(size = 16)
+  )
 
 ## Visualization basic with all individuals ####
 visualization_longitudinal <- function(df, ranef_summary, posterior_summary, PIP_threshold,type="PSS") {
@@ -538,20 +559,13 @@ visualization_trajectories_multiple_thresholds <- function(df, ranef_summary, po
   
   # Plot
   # Plot
-  ggplot(data = all_trajectories, aes(x = week, y = value, color = class, fill = class, linetype = as.factor(PIP_threshold), group = interaction(class, PIP_threshold))) +
-    geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.1, color = NA) +
+  ggplot(data = all_trajectories, aes(x = week, y = value, color = class, linetype = as.factor(PIP_threshold), group = interaction(class, PIP_threshold))) +
     geom_line(size = 0.8) +
-    geom_point(size = 0.8) +
-
+    scale_x_continuous(breaks = 1:12)+
     scale_color_manual(values = c(
-      "Average" = "gray60",
-      "Resilient" = "steelblue",
-      "Vulnerable" = "firebrick"
-    )) +
-    scale_fill_manual(values = c(
-      "Average" = "gray80",
-      "Resilient" = "steelblue",
-      "Vulnerable" = "firebrick"
+      "Average" = "gray10",
+      "Resilient" = "gray40",
+      "Vulnerable" = "gray80"
     )) +
     scale_linetype_manual(
       values = c("solid", "dashed", "dotdash", "twodash")[1:length(thresholds)],
@@ -566,7 +580,14 @@ visualization_trajectories_multiple_thresholds <- function(df, ranef_summary, po
       title = "Mean residual trajectories by class for multiple PIP thresholds",
       linetype = "PIP threshold"
     ) +
-    theme_minimal()
+    theme_minimal()+
+    theme(
+      plot.title = element_text(size = 16),
+      legend.title = element_text(size = 16),
+      legend.text = element_text(size = 16),
+      axis.title = element_text(size = 16),
+      axis.text = element_text(size = 16)
+    )
 }
 visualization_trajectories_multiple_thresholds(d,ranef_summary_PSS,posterior_sumarry_PSS,list(0.70,0.8,0.9),type="PSS")
 visualization_trajectories_multiple_thresholds(d,ranef_summary_DH,posterior_sumarry_DH,list(0.70,0.8,0.9),type="DH")

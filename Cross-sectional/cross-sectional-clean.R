@@ -1329,8 +1329,10 @@ ghq <- paste0("ghq_", 1:28)
 variables <- c("id","age","income","employment_status","gender",bfi,cdrisk,cerq,cope,ctq,fsozu,gpass,gse,ielc,le,lotr,pss,dh,ghq)
 
 # Select variables and t=1
-df_LORA <- df_LORA[df_LORA$t==1&!is.na(df_LORA$study),variables]
-
+df_LORA$id <- as.character(df_LORA$id)
+df_LORA$study <- as.character(df_LORA$study)
+df_LORA <- df_LORA[df_LORA$t==1&!is.na(df_LORA$study)&!is.na(df_LORA$id),variables]
+df_LORA <- df_LORA[1:1191,]
 # Format the dataframe
 df_LORA <- as.data.frame(lapply(df_LORA, function(x) as.numeric(as.character(x))))
 
@@ -1673,24 +1675,26 @@ visualization_recall_precision(df_perf_cv_dh_items)
 
 
 ## LORA DH Grouping and visualization ####
+df_LORA_grouping_dh <- df_LORA[!is.na(df_LORA$dh_sum)&!is.na(df_LORA$ghq_sum),] 
+dim(df_LORA_grouping_dh)
 adversity_string <- "dh_sum"
 outcome_string <- "ghq_sum"
-outcome <- LORA_dh.r$ghq_sum
 bins_dh <- c(0,76,151,226)
-res_dh <- adjusted_fit(LORA_dh.r,adversity=adversity_string,outcome=outcome_string,main="Adjusted and unadjusted linear regression for GHQ~DH",xlab="DH",ylab="GHQ")
-all_groups_dh <- get_all_groups(LORA_dh.r,adversity_string,outcome_string,bins_dh,res_dh,visualization = TRUE)
+res_dh <- adjusted_fit(df_LORA_grouping_dh,adversity=adversity_string,outcome=outcome_string,main="Adjusted and unadjusted linear regression for GHQ~DH",xlab="DH",ylab="GHQ")
+all_groups_dh <- get_all_groups(df_LORA_grouping_dh,adversity_string,outcome_string,bins_dh,res_dh,visualization = TRUE)
 df_result_dh <- all_groups_dh$df_result
 df_n_groups_dh <- all_groups_dh$df_n_groups
 
 
 ## LORA PSS Grouping and visualization ####
+df_LORA_grouping_pss <- df_LORA[!is.na(df_LORA$pss_sum)&!is.na(df_LORA$ghq_sum),] 
+dim(df_LORA_grouping_pss)
 adversity_string <- "pss_sum"
 outcome_string <- "ghq_sum"
-outcome <- LORA_pss.r$ghq_sum
 bins_pss <- c(0,14,26,40)
-res_pss <- adjusted_fit(LORA_pss.r,adversity=adversity_string,outcome=outcome_string,main="Adjusted and unadjusted linear regression for GHQ~PSS",xlab="PSS",ylab="GHQ")
+res_pss <- adjusted_fit(df_LORA_grouping_pss,adversity=adversity_string,outcome=outcome_string,main="Adjusted and unadjusted linear regression for GHQ~PSS",xlab="PSS",ylab="GHQ")
 res_pss$plot
-all_groups_pss <- get_all_groups(LORA_pss.r,adversity_string,outcome_string,bins,res_pss,visualization = TRUE)
+all_groups_pss <- get_all_groups(df_LORA_grouping_pss,adversity_string,outcome_string,bins,res_pss,visualization = TRUE)
 df_result_pss <- all_groups_pss$df_result
 df_n_groups_pss <- all_groups_pss$df_n_groups
 
