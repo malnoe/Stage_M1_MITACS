@@ -9,10 +9,10 @@ library(tidyr)
 
 
 ## Import the data and the functions ####
-df <- readRDS("C:/Users/garan/Documents/Ecole/M1/Stage/Internship_repo/Longitudinal/LORA/ds_forJan.rds")
-source("~/Ecole/M1/Stage/Internship_repo/Longitudinal/LORA/utils.R")
+df <- readRDS("C:/Users/garan/Documents/Ecole/M1/Stage/Internship_repo/Classification/Longitudinal/LORA/ds_forJan.rds")
+source("~/Ecole/M1/Stage/Internship_repo/Classification/Longitudinal/LORA/utils.R")
 
-load("~/Ecole/M1/Stage/Internship_repo/Longitudinal/LORA/longitudinal_work_data.RData")
+load("~/Ecole/M1/Stage/Internship_repo/Classification/Longitudinal/LORA/longitudinal_work_data.RData")
 
 ## Select, recode and sum variables and clean dataframe ####
   # Select relevant variables and lines and create the week variable

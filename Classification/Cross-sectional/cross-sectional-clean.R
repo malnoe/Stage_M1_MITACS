@@ -16,8 +16,8 @@ library(rpart) # classification trees
 library(rstanarm) # bayesian lm
 
 ## Set-up ####
-setwd("~/Ecole/M1/Stage/Internship_repo/Cross-sectional/RYSE data")
-load("~/Ecole/M1/Stage/Internship_repo/Cross-sectional/clean_rdata.RData")
+setwd("~/Ecole/M1/Stage/Internship_repo/Classification/Cross-sectional/RYSE data")
+load("~/Ecole/M1/Stage/Internship_repo/Classification/Cross-sectional/clean_rdata.RData")
 
 RYSE_master_dataset <- read_sav("RYSE_master_dataset_08082022.sav")
 df_CA <- RYSE_master_dataset[RYSE_master_dataset$Country==1,]
@@ -111,10 +111,10 @@ adjusted_fit <- function(df,adversity,outcome,main="Adjusted and unadjusted line
   
   # Resilient/Vulnerable anotations
   if(lines_df$slope[[1]] < 0){
-    plot <-plot + geom_text(x=max(na.omit(df[[adversity]]))-5,y=max(na.omit(df[[outcome]]))-5,label="Resilient",alpha=0.2,color="grey",size=7) + geom_text(x=min(na.omit(df[[adversity]]))+5,y=min(na.omit(df[[outcome]]))+5,label="Vulnerable",alpha=0.2,color="grey",size=7)
+    plot <-plot + geom_text(x=max(na.omit(df[[adversity]]))-5,y=max(na.omit(df[[outcome]]))-5,label="Resilient",alpha=0.2,color="grey",size=7) + geom_text(x=min(na.omit(df[[adversity]]))+5,y=min(na.omit(df[[outcome]]))+5,label="Non-resilient",alpha=0.2,color="grey",size=7)
   }
   else{
-    plot <- plot + geom_text(x=min(na.omit(df[[adversity]]))+5,y=max(na.omit(df[[outcome]]))-5,label="Vulnerable",alpha=0.2,color="grey",size=7) + geom_text(x=max(na.omit(df[[adversity]]))-5,y=min(na.omit(df[[outcome]]))+5,label="Resilient",alpha=0.2,color="grey",size=7)
+    plot <- plot + geom_text(x=min(na.omit(df[[adversity]]))+5,y=max(na.omit(df[[outcome]]))-5,label="Non-resilient",alpha=0.2,color="grey",size=7) + geom_text(x=max(na.omit(df[[adversity]]))-5,y=min(na.omit(df[[outcome]]))+5,label="Resilient",alpha=0.2,color="grey",size=7)
   }
   
   return(list(plot=plot,
@@ -136,13 +136,13 @@ get_groups_raw_residuals <- function(residuals,is_resilience_positive=FALSE){
       res_list[i] <- if(is.na(residuals[i])){NA}
       else if(residuals[i]>0){"resilient"}
       else if(residuals[i]==0){"average"}
-      else{"vulnerable"}
+      else{"non_resilient"}
     }
     else{
       res_list[i] <- if(is.na(residuals[i])){NA}
       else if(residuals[i]<0){"resilient"}
       else if(residuals[i]==0){"average"}
-      else{"vulnerable"}
+      else{"non_resilient"}
     }
   }
   return(res_list)
@@ -156,7 +156,7 @@ visualization_raw_residuals <- function(df, adversity, outcome, adjusted_lm, gro
   slope     <- coef(adjusted_lm)[2]
   
   # Add groups to the temporary df to color the points
-  df$group <- factor(groups, levels = c("resilient", "average", "vulnerable"))
+  df$group <- factor(groups, levels = c("resilient", "average", "non_resilient"))
   
   # Viz
   plot <- ggplot(df, aes(x = .data[[adversity]], y = .data[[outcome]], color = group)) +
@@ -170,14 +170,14 @@ visualization_raw_residuals <- function(df, adversity, outcome, adjusted_lm, gro
     ) +
     theme_minimal(base_size = 18) +
     theme(plot.title = element_text(size = 18))+
-    scale_color_manual(values=c("resilient"="cadetblue4","vulnerable"="coral","average"="grey60"))
+    scale_color_manual(values=c("resilient"="cadetblue4","non_resilient"="coral","average"="grey60"),labels = c("resilient" = "Resilient", "average" = "Average", "non_resilient" = "Non-resilient"))
   
-  # Add resilient and vulnerable text
+  # Add resilient and non_resilient text
   if(slope < 0){
-    plot <-plot + geom_text(x=max(na.omit(df[[adversity]]))-5,y=max(na.omit(df[[outcome]]))-5,label="Resilient",alpha=0.2,color="grey",size=7) + geom_text(x=min(na.omit(df[[adversity]]))+5,y=min(na.omit(df[[outcome]]))+5,label="Vulnerable",alpha=0.2,color="grey",size=7)
+    plot <-plot + geom_text(x=max(na.omit(df[[adversity]]))-5,y=max(na.omit(df[[outcome]]))-5,label="Resilient",alpha=0.2,color="grey",size=7) + geom_text(x=min(na.omit(df[[adversity]]))+5,y=min(na.omit(df[[outcome]]))+5,label="Non-resilient",alpha=0.2,color="grey",size=7)
   }
   else{
-    plot <- plot + geom_text(x=min(na.omit(df[[adversity]]))+5,y=max(na.omit(df[[outcome]]))-5,label="Vulnerable",alpha=0.2,color="grey",size=7) + geom_text(x=max(na.omit(df[[adversity]]))-5,y=min(na.omit(df[[outcome]]))+5,label="Resilient",alpha=0.2,color="grey",size=7)
+    plot <- plot + geom_text(x=min(na.omit(df[[adversity]]))+5,y=max(na.omit(df[[outcome]]))-5,label="Non-resilient",alpha=0.2,color="grey",size=7) + geom_text(x=max(na.omit(df[[adversity]]))-5,y=min(na.omit(df[[outcome]]))+5,label="Resilient",alpha=0.2,color="grey",size=7)
   }
   
   return(plot)
@@ -231,12 +231,12 @@ get_groups_intervals <- function(actual, pred, is_resilience_positive = FALSE) {
   
   # Classification with respect to the sign
   if (is_resilience_positive) {
-    groups[valid & actual < pred$lwr] <- "vulnerable"
+    groups[valid & actual < pred$lwr] <- "non_resilient"
     groups[valid & actual > pred$upr] <- "resilient"
     groups[valid & actual >= pred$lwr & actual <= pred$upr] <- "average"
   } else {
     groups[valid & actual < pred$lwr] <- "resilient"
-    groups[valid & actual > pred$upr] <- "vulnerable"
+    groups[valid & actual > pred$upr] <- "non_resilient"
     groups[valid & actual >= pred$lwr & actual <= pred$upr] <- "average"
   }
   
@@ -295,12 +295,12 @@ visualization_intervals <- function(df, adversity, outcome, adjusted_lm, preds, 
                 label = "Resilient", alpha = 0.2, color = "grey",size=7) +
       geom_text(x = min(na.omit(df[[adversity]])) + 5,
                 y = min(na.omit(df[[outcome]])) + 5,
-                label = "Vulnerable", alpha = 0.2, color = "grey",size=7)
+                label = "Non-resilient", alpha = 0.2, color = "grey",size=7)
   } else {
     plot <- plot +
       geom_text(x = min(na.omit(df[[adversity]])) + 5,
                 y = max(na.omit(df[[outcome]])) - 5,
-                label = "Vulnerable", alpha = 0.2, color = "grey",size=7) +
+                label = "Non-resilient", alpha = 0.2, color = "grey",size=7) +
       geom_text(x = max(na.omit(df[[adversity]])) - 5,
                 y = min(na.omit(df[[outcome]])) + 5,
                 label = "Resilient", alpha = 0.2, color = "grey",size=7)
@@ -323,11 +323,11 @@ classification_quantiles <- function(data_training, new_data, quantile_sub, quan
   res[valid] <- "average"
   
   if (is_resilience_positive) {
-    res[valid & residuals_new <= res_sub] <- "vulnerable"
+    res[valid & residuals_new <= res_sub] <- "non_resilient"
     res[valid & residuals_new >= res_sup] <- "resilient"
   } else {
     res[valid & residuals_new <= res_sub] <- "resilient"
-    res[valid & residuals_new >= res_sup] <- "vulnerable"
+    res[valid & residuals_new >= res_sup] <- "non_resilient"
   }
   
   return(res)
@@ -369,7 +369,7 @@ classification_sd <- function(new_data,bins,res_SD,model,outcome_string,adversit
   # Get the residual of each individual
   residuals <- new_data[[outcome_string]] - (model$coefficients[[1]] + new_data[[adversity_string]] * model$coefficients[[2]])
   
-  # Flag each residual as resilient, average or vulnerable
+  # Flag each residual as resilient, average or non_resilient
   groups_sd <- rep(NA, nrow(new_data))
   
   #Fin the sign of the relation
@@ -394,13 +394,13 @@ classification_sd <- function(new_data,bins,res_SD,model,outcome_string,adversit
       if (res > sd_i) {
         groups_sd[i] <- "resilient"
       } else if (res < -sd_i) {
-        groups_sd[i] <- "vulnerable"
+        groups_sd[i] <- "non_resilient"
       }
     }
-    # Bigger residual -> vulnerable
+    # Bigger residual -> non_resilient
     else{
       if (res > sd_i) {
-        groups_sd[i] <- "vulnerable"
+        groups_sd[i] <- "non_resilient"
       } 
       else if (res < -sd_i) {
         groups_sd[i] <- "resilient"
@@ -459,12 +459,12 @@ visualization_sd_intervals <- function(df,adversity,outcome,adjusted_lm,bins,res
     scale_fill_manual(values = c("2SD" = "lightblue1", "1SD" = "skyblue2", "0.5SD" = "deepskyblue3"))
   
   
-  # Add resilient and vulnerable text
+  # Add resilient and non_resilient text
   if(slope < 0){
-    plot <-plot + geom_text(x=max(na.omit(df[[adversity]]))-5,y=max(na.omit(df[[outcome]]))-5,label="Resilient",alpha=0.2,color="grey",size=7) + geom_text(x=min(na.omit(df[[adversity]]))+5,y=min(na.omit(df[[outcome]]))+5,label="Vulnerable",alpha=0.2,color="grey",size=7)
+    plot <-plot + geom_text(x=max(na.omit(df[[adversity]]))-5,y=max(na.omit(df[[outcome]]))-5,label="Resilient",alpha=0.2,color="grey",size=7) + geom_text(x=min(na.omit(df[[adversity]]))+5,y=min(na.omit(df[[outcome]]))+5,label="Non-resilient",alpha=0.2,color="grey",size=7)
   }
   else{
-    plot <- plot + geom_text(x=min(na.omit(df[[adversity]]))+5,y=max(na.omit(df[[outcome]]))-5,label="Vulnerable",alpha=0.2,color="grey",size=7) + geom_text(x=max(na.omit(df[[adversity]]))-5,y=min(na.omit(df[[outcome]]))+5,label="Resilient",alpha=0.2,color="grey",size=7)
+    plot <- plot + geom_text(x=min(na.omit(df[[adversity]]))+5,y=max(na.omit(df[[outcome]]))-5,label="Non-resilient",alpha=0.2,color="grey",size=7) + geom_text(x=max(na.omit(df[[adversity]]))-5,y=min(na.omit(df[[outcome]]))+5,label="Resilient",alpha=0.2,color="grey",size=7)
   }
   
   return(plot)
@@ -492,14 +492,14 @@ res_kmeans <- function(data_training,lm){
   average_group <- ordered_clusters[2]
   if(lm$coefficients[[2]]<0){
     resilient_group <- ordered_clusters[3]
-    vulnerable_group <- ordered_clusters[1]
+    non_resilient_group <- ordered_clusters[1]
   }
   else{
     resilient_group <- ordered_clusters[1]
-    vulnerable_group <- ordered_clusters[3]
+    non_resilient_group <- ordered_clusters[3]
   }
   
-  return(list(vulnerable_center=clust$centers[as.numeric(vulnerable_group)],average_center=clust$centers[as.numeric(average_group)],resilient_center=clust$centers[as.numeric(resilient_group)]))
+  return(list(non_resilient_center=clust$centers[as.numeric(non_resilient_group)],average_center=clust$centers[as.numeric(average_group)],resilient_center=clust$centers[as.numeric(resilient_group)]))
   
 }
 
@@ -509,7 +509,7 @@ classification_kmeans <- function(new_data, res_kmeans, model, outcome_string, a
   
   # centers
   centers <- c(
-    vulnerable = res_kmeans$vulnerable_center,
+    non_resilient = res_kmeans$non_resilient_center,
     average = res_kmeans$average_center,
     resilient = res_kmeans$resilient_center
   )
@@ -535,20 +535,20 @@ visualization_groups <- function(df,adversity,outcome,adjusted_lm,groups,main="C
   slope     <- coef(adjusted_lm)[2]
   
   # Add groups to the temporary df to color the points
-  df$group <- factor(groups, levels = c("resilient", "average", "vulnerable",NA))
+  df$group <- factor(groups, levels = c("resilient", "average", "non_resilient",NA))
   
   
   # Get the limit values of the residuals to visualize the separation of the groups
   df$residuals <- df[[outcome]] - (intercept + slope*df[[adversity]])
-  # Resilient = positive residuals, vulnerable = negative residuals
+  # Resilient = positive residuals, non_resilient = negative residuals
   if(slope<0){
     resilient_limit <- min(df[df$group=="resilient",]$residuals, na.rm = TRUE)
-    vulnerable_limit <- max(df[df$group=="vulnerable",]$residuals, na.rm = TRUE)
+    non_resilient_limit <- max(df[df$group=="non_resilient",]$residuals, na.rm = TRUE)
   }
-  # Resilient = negative residuals, vulnerable = positive residuals
+  # Resilient = negative residuals, non_resilient = positive residuals
   else{
     resilient_limit <- max(df[df$group=="resilient",]$residuals, na.rm = TRUE)
-    vulnerable_limit <- min(df[df$group=="vulnerable",]$residuals, na.rm = TRUE)
+    non_resilient_limit <- min(df[df$group=="non_resilient",]$residuals, na.rm = TRUE)
   }
   
   # Viz
@@ -563,20 +563,20 @@ visualization_groups <- function(df,adversity,outcome,adjusted_lm,groups,main="C
     ) +
     theme_minimal(base_size = 18) +
     theme(plot.title = element_text(size = 18))+
-    scale_color_manual(values = c("resilient" = "cadetblue4", "average" = "grey60", "vulnerable" = "coral"))
+    scale_color_manual(values = c("resilient" = "cadetblue4", "average" = "grey60", "non_resilient" = "coral"),labels = c("resilient" = "Resilient", "average" = "Average", "non_resilient" = "Non-resilient"))
   
-  # Add resilient and vulnerable text + lines for the seperation of the groups
+  # Add resilient and non_resilient text + lines for the seperation of the groups
   if(slope < 0){
-    plot <-plot + geom_text(x=max(na.omit(df[[adversity]]))-5,y=max(na.omit(df[[outcome]]))-5,label="Resilient",alpha=0.2,color="grey",size=7) + geom_text(x=min(na.omit(df[[adversity]]))+5,y=min(na.omit(df[[outcome]]))+5,label="Vulnerable",alpha=0.2,color="grey",size=7)
+    plot <-plot + geom_text(x=max(na.omit(df[[adversity]]))-5,y=max(na.omit(df[[outcome]]))-5,label="Resilient",alpha=0.2,color="grey",size=7) + geom_text(x=min(na.omit(df[[adversity]]))+5,y=min(na.omit(df[[outcome]]))+5,label="Non-resilient",alpha=0.2,color="grey",size=7)
     plot <- plot + 
       geom_abline(intercept = intercept+resilient_limit, slope = slope, color = "grey", linetype = "dashed")+
-      geom_abline(intercept = intercept+vulnerable_limit, slope = slope, color = "grey", linetype = "dashed")
+      geom_abline(intercept = intercept+non_resilient_limit, slope = slope, color = "grey", linetype = "dashed")
   }
   else{
-    plot <- plot + geom_text(x=min(na.omit(df[[adversity]]))+5,y=max(na.omit(df[[outcome]]))-5,label="Vulnerable",alpha=0.2,color="grey",size=7) + geom_text(x=max(na.omit(df[[adversity]]))-5,y=min(na.omit(df[[outcome]]))+5,label="Resilient",alpha=0.2,color="grey",size=7)
+    plot <- plot + geom_text(x=min(na.omit(df[[adversity]]))+5,y=max(na.omit(df[[outcome]]))-5,label="Non-resilient",alpha=0.2,color="grey",size=7) + geom_text(x=max(na.omit(df[[adversity]]))-5,y=min(na.omit(df[[outcome]]))+5,label="Resilient",alpha=0.2,color="grey",size=7)
     plot <- plot + 
       geom_abline(intercept = intercept+resilient_limit, slope = slope, color = "grey", linetype = "dashed")+
-      geom_abline(intercept = intercept+vulnerable_limit, slope = slope, color = "grey", linetype = "dashed")
+      geom_abline(intercept = intercept+non_resilient_limit, slope = slope, color = "grey", linetype = "dashed")
   }
   
   return(plot)
@@ -597,12 +597,12 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
   adversity <- df[[adversity_string]]
   residuals_new_data <- outcome - (lm_adjusted$coefficients[[1]] + adversity * lm_adjusted$coefficients[[2]])
   
-  df_n_groups <- data.frame(resilient=c(),average=c(),vulnerable=c())
+  df_n_groups <- data.frame(resilient=c(),average=c(),non_resilient=c())
   df_result <- data.frame(residuals=residuals_new_data,adversity=adversity)
   
   # Raw residuals
   groups_raw <- get_groups_raw_residuals(residuals_new_data,is_resilience_positive=resilience_sign)
-  df_n_groups <- rbind(df_n_groups,data.frame(resilient = sum(groups_raw=="resilient", na.rm=TRUE), average = sum(groups_raw=="average", na.rm=TRUE), vulnerable = sum(groups_raw=="vulnerable", na.rm=TRUE), row.names=c("raw")))
+  df_n_groups <- rbind(df_n_groups,data.frame(resilient = sum(groups_raw=="resilient", na.rm=TRUE), average = sum(groups_raw=="average", na.rm=TRUE), non_resilient = sum(groups_raw=="non_resilient", na.rm=TRUE), row.names=c("raw")))
   df_result[["raw"]] <- groups_raw
   
   if(visualization){
@@ -627,7 +627,7 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
   for(i in 1:length(preds_conf)){
     groups <- get_groups_intervals(outcome, preds_conf[[i]],is_resilience_positive=resilience_sign)
     df_n_groups <- rbind(df_n_groups,
-                         data.frame(resilient = sum(groups=="resilient", na.rm=TRUE), average = sum(groups=="average", na.rm=TRUE), vulnerable = sum(groups=="vulnerable", na.rm=TRUE), row.names=c(names_conf[[i]])))
+                         data.frame(resilient = sum(groups=="resilient", na.rm=TRUE), average = sum(groups=="average", na.rm=TRUE), non_resilient = sum(groups=="non_resilient", na.rm=TRUE), row.names=c(names_conf[[i]])))
     df_result[[names_conf[[i]]]] <- groups
   }
   
@@ -673,7 +673,7 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
   for(i in 1:length(preds_cred)){
     groups <- get_groups_intervals(outcome, preds_cred[[i]],is_resilience_positive=resilience_sign)
     df_n_groups <- rbind(df_n_groups,
-                         data.frame(resilient = sum(groups=="resilient", na.rm=TRUE), average = sum(groups=="average", na.rm=TRUE), vulnerable = sum(groups=="vulnerable", na.rm=TRUE), row.names=c(names_cred[[i]])))
+                         data.frame(resilient = sum(groups=="resilient", na.rm=TRUE), average = sum(groups=="average", na.rm=TRUE), non_resilient = sum(groups=="non_resilient", na.rm=TRUE), row.names=c(names_cred[[i]])))
     df_result[[names_cred[[i]]]] <- groups
   }
   
@@ -712,7 +712,7 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
   for(i in 1:length(list_quantile_sub)){
     groups <- classification_quantiles(data_training = data_training, new_data = df,quantile_sub = list_quantile_sub[[i]],quantile_sup = list_quantile_sup[[i]],model = lm_adjusted,outcome_string,adversity_string)
     df_n_groups <- rbind(df_n_groups,
-                         data.frame(resilient = sum(groups=="resilient", na.rm=TRUE), average = sum(groups=="average", na.rm=TRUE), vulnerable = sum(groups=="vulnerable", na.rm=TRUE), row.names=c(names_quant[[i]])))
+                         data.frame(resilient = sum(groups=="resilient", na.rm=TRUE), average = sum(groups=="average", na.rm=TRUE), non_resilient = sum(groups=="non_resilient", na.rm=TRUE), row.names=c(names_quant[[i]])))
     df_result[[names_quant[[i]]]] <- groups
   }
   
@@ -726,7 +726,7 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
     res_sd[[i]] <- res_sd_i
     groups <- classification_sd(df,bins,res_sd_i,lm_adjusted,outcome_string,adversity_string,list_sd_multiplicator[[i]])
     df_n_groups <- rbind(df_n_groups,
-                         data.frame(resilient = sum(groups=="resilient", na.rm=TRUE), average = sum(groups=="average", na.rm=TRUE), vulnerable = sum(groups=="vulnerable", na.rm=TRUE), row.names=c(names_sd[[i]])))
+                         data.frame(resilient = sum(groups=="resilient", na.rm=TRUE), average = sum(groups=="average", na.rm=TRUE), non_resilient = sum(groups=="non_resilient", na.rm=TRUE), row.names=c(names_sd[[i]])))
     df_result[[names_sd[[i]]]] <- groups
   }
   if(visualization){
@@ -737,7 +737,7 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
   res_kmeans <- res_kmeans(data_training,lm_adjusted)
   groups_kmeans <- classification_kmeans(df, res_kmeans, lm_adjusted, outcome_string, adversity_string)
   df_n_groups <- rbind(df_n_groups,
-                       data.frame(resilient = sum(groups_kmeans=="resilient", na.rm=TRUE), average = sum(groups_kmeans=="average", na.rm=TRUE), vulnerable = sum(groups_kmeans=="vulnerable", na.rm=TRUE), row.names=c("Kmeans")))
+                       data.frame(resilient = sum(groups_kmeans=="resilient", na.rm=TRUE), average = sum(groups_kmeans=="average", na.rm=TRUE), non_resilient = sum(groups_kmeans=="non_resilient", na.rm=TRUE), row.names=c("Kmeans")))
   df_result[["Kmeans"]] <- groups_kmeans
   if(visualization){
     print(visualization_groups(df,adversity_string,outcome_string,lm_adjusted,groups_kmeans,main="Groups using k-means algorithm",xlab=xlab,ylab=ylab))
@@ -811,7 +811,7 @@ df_n_groups_BDI_Engagement <- all_groups_BDI_Engagement$df_n_groups
 
 
 ## Classification functions ####
-classification_metrics <- function(true_labels, predicted_labels,levels=c("resilient", "average", "vulnerable")) {
+classification_metrics <- function(true_labels, predicted_labels,levels=c("resilient", "average", "non_resilient")) {
   # Convert to factors with same levels
   true_labels <- factor(true_labels, levels = levels)
   predicted_labels <- factor(predicted_labels, levels = levels)
@@ -938,7 +938,7 @@ estimation_classification <- function(df_train,df_test,adversity_string,outcome_
     
     # Metrics
     metrics <- classification_metrics(df_test[["groups"]],predictions)
-    null_model <- max(metrics$support[["average"]],metrics$support[["resilient"]],metrics$support[["vulnerable"]]) / (metrics$support[["resilient"]]+metrics$support[["average"]]+metrics$support[["vulnerable"]])
+    null_model <- max(metrics$support[["average"]],metrics$support[["resilient"]],metrics$support[["non_resilient"]]) / (metrics$support[["resilient"]]+metrics$support[["average"]]+metrics$support[["non_resilient"]])
     
     res <- rbind(res, data.frame(
       group_name = group_name,
@@ -954,12 +954,12 @@ estimation_classification <- function(df_train,df_test,adversity_string,outcome_
       precision_average = metrics$precision_per_class[["average"]],
       recall_average = metrics$recall_per_class[["average"]],
       f1score_average = metrics$f1_per_class[["average"]],
-      precision_vulnerable = metrics$precision_per_class[["vulnerable"]],
-      recall_vulnerable = metrics$recall_per_class[["vulnerable"]],
-      f1score_vulnerable = metrics$f1_per_class[["vulnerable"]],
+      precision_non_resilient = metrics$precision_per_class[["non_resilient"]],
+      recall_non_resilient = metrics$recall_per_class[["non_resilient"]],
+      f1score_non_resilient = metrics$f1_per_class[["non_resilient"]],
       support_resilient = metrics$support[["resilient"]],
       support_average = metrics$support[["average"]],
-      support_vulnerable = metrics$support[["vulnerable"]]
+      support_non_resilient = metrics$support[["non_resilient"]]
     ))
   }
   return(res)
@@ -1013,8 +1013,8 @@ estimation_classification_cv <- function(df, adversity_string, outcome_string, b
       return(mean(values, na.rm = TRUE))
     }
     
-    support_total <- average_metric("support", "resilient") + average_metric("support", "average") + average_metric("support", "vulnerable")
-    null_model <- max(average_metric("support", "resilient"), average_metric("support", "average"), average_metric("support", "vulnerable")) / support_total
+    support_total <- average_metric("support", "resilient") + average_metric("support", "average") + average_metric("support", "non_resilient")
+    null_model <- max(average_metric("support", "resilient"), average_metric("support", "average"), average_metric("support", "non_resilient")) / support_total
     
     res <- rbind(res, data.frame(
       group_name = group_name,
@@ -1030,12 +1030,12 @@ estimation_classification_cv <- function(df, adversity_string, outcome_string, b
       precision_average = average_metric("precision_per_class", "average"),
       recall_average = average_metric("recall_per_class", "average"),
       f1score_average = average_metric("f1_per_class", "average"),
-      precision_vulnerable = average_metric("precision_per_class", "vulnerable"),
-      recall_vulnerable = average_metric("recall_per_class", "vulnerable"),
-      f1score_vulnerable = average_metric("f1_per_class", "vulnerable"),
+      precision_non_resilient = average_metric("precision_per_class", "non_resilient"),
+      recall_non_resilient = average_metric("recall_per_class", "non_resilient"),
+      f1score_non_resilient = average_metric("f1_per_class", "non_resilient"),
       support_resilient = average_metric("support", "resilient"),
       support_average = average_metric("support", "average"),
-      support_vulnerable = average_metric("support", "vulnerable")
+      support_non_resilient = average_metric("support", "non_resilient")
     ))
   }
   
@@ -1144,7 +1144,7 @@ comparison_accuracy_null_model_classifier <- function(df_perf){
   return(plot)
 }
 visualization_recall_precision <- function(df_perf){
-  criteria_index <- df_perf$support_average>=df_perf$support_resilient & df_perf$support_average>=df_perf$support_vulnerable & df_perf$recall_resilient>0.0001 & df_perf$precision_resilient>0.0001
+  criteria_index <- df_perf$support_average>=df_perf$support_resilient & df_perf$support_average>=df_perf$support_non_resilient & df_perf$recall_resilient>0.0001 & df_perf$precision_resilient>0.0001
   df_perf_class_comparison <- df_perf[criteria_index,]
   
   ggplot(df_perf_class_comparison,aes(x=1-recall_resilient,y=precision_resilient,label=group_name))+
@@ -1692,9 +1692,9 @@ dim(df_LORA_grouping_pss)
 adversity_string <- "pss_sum"
 outcome_string <- "ghq_sum"
 bins_pss <- c(0,14,26,40)
-res_pss <- adjusted_fit(df_LORA_grouping_pss,adversity=adversity_string,outcome=outcome_string,main="Adjusted and unadjusted linear regression for GHQ~PSS",xlab="PSS",ylab="GHQ")
+res_pss <- adjusted_fit(df_LORA_grouping_pss,adversity=adversity_string,outcome=outcome_string,main="Adjusted and unadjusted linear regression for GHQ~PSS",xlab="Adversity (PSS)",ylab="Outcome (GHQ)")
 res_pss$plot
-all_groups_pss <- get_all_groups(df_LORA_grouping_pss,adversity_string,outcome_string,bins,res_pss,visualization = TRUE)
+all_groups_pss <- get_all_groups(df_LORA_grouping_pss,adversity_string,outcome_string,bins,res_pss,visualization = TRUE,xlab="Adversity (PSS)",ylab="Outcome (GHQ)")
 df_result_pss <- all_groups_pss$df_result
 df_n_groups_pss <- all_groups_pss$df_n_groups
 
