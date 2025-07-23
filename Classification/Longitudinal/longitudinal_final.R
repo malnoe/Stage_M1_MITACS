@@ -6,6 +6,7 @@ library(dplyr)
 library(rjags)
 library(SSranef)
 library(tidyr)
+library(missForest)
 
 
 ## Import the data and the functions ####
@@ -590,6 +591,18 @@ predictive_df <- as.data.frame(lapply(predictive_df, function(x) as.numeric(as.c
 for(variable in variables){
   predictive_df[[variable]] <- ifelse(predictive_df[[variable]]>=0, predictive_df[[variable]], NA)
 }
+
+# Select people with more than 70% of correct data
+dim(predictive_df)
+na_ratio <- rowMeans(is.na(predictive_df), na.rm = FALSE)
+indices <- which(na_ratio > 0.3 & !is.na(na_ratio))  # on exclut les NA
+predictive_df <- predictive_df[-indices,]
+dim(predictive_df)
+
+# We do missForest
+predictive_df.mf <- missForest::missForest(xmis = predictive_df)
+predictive_df <- predictive_df.mf$ximp
+
 # Recode the items if needed
 recode <- function(df,variables_to_recode,min,max){
   for(variable in variables_to_recode){
@@ -680,14 +693,11 @@ predictive_df[["ielc_sum"]] <- rowSums(predictive_df[,ielc],na.rm = TRUE)
 predictive_df[["le_sum"]] <- rowSums(predictive_df[,le],na.rm = TRUE)
 predictive_df[["lotr_sum"]] <- rowSums(predictive_df[,lotr],na.rm = TRUE)
 
-dim(predictive_df)
-na_ratio <- rowMeans(is.na(predictive_df), na.rm = FALSE)
-indices <- which(na_ratio > 0.3 & !is.na(na_ratio))  # on exclut les NA
-predictive_df <- predictive_df[-indices,]
-dim(predictive_df)
+
+# 2. Build new_d with inly the people who have enough predictive data (ie id in predictive_df)
 new_d <- d %>% filter(id %in% predictive_df$id) %>% dplyr::select(id,week,present,pss_sum,dh_sum,ghq_sum)
 
-# 2. Redo the residualization
+# 3. Redo the residualization
 new_d[["residuals_ghq_pss"]] <- NA
 new_d[["residuals_ghq_dh"]] <- NA
 
@@ -732,7 +742,7 @@ for(adversity in c("pss_sum","dh_sum")){
   }
 }
 
-# 3. Redo the spike and slab
+# 4. Redo the spike and slab
 # GHQ~PSS
 new_alpha_pss <- ss_ranef_alpha(y=new_d$residuals_ghq_pss, unit=new_d$id)
 posterior_summary(new_alpha_pss, ci = 0.90, digits = 2)
@@ -748,8 +758,8 @@ ranef_summary(new_alpha_dh, ci = 0.95, digits = 2)
 caterpillar_plot(new_alpha_dh,col_id = FALSE)
 pip_plot(new_alpha_dh,col_id = FALSE)
 
-# 4. Get the corresponding classification
-get_classification <- function(d,ranef_summary,list_thresholds=seq(from = 0.5, to = 1, by = 0.05)){
+# 5. Get the corresponding classification depeding on the threshold
+get_classification <- function(d,ranef_summary,list_thresholds=seq(from = 0, to = 1, by = 0.05)){
   classifications <- tibble(id = unique(d$id))
   
   for (PIP_threshold in list_thresholds) {
@@ -760,10 +770,10 @@ get_classification <- function(d,ranef_summary,list_thresholds=seq(from = 0.5, t
       mutate(id = id_list) %>%
       mutate(
         !!col_name := case_when(
-          PIP < PIP_threshold ~ "Average",
-          PIP >= PIP_threshold & Post.mean < 0 ~ "Resilient",
-          PIP >= PIP_threshold & Post.mean > 0 ~ "Non-resilient",
-          TRUE ~ "Average"
+          PIP < PIP_threshold ~ "average",
+          PIP >= PIP_threshold & Post.mean < 0 ~ "resilient",
+          PIP >= PIP_threshold & Post.mean > 0 ~ "non-resilient",
+          TRUE ~ "average"
         )
       ) %>%
       dplyr::select(id, !!col_name)
@@ -781,10 +791,7 @@ classification_dh <- get_classification(new_d,ranef_summary_DH)
 ranef_summary_PSS <- ranef_summary(new_alpha_pss, ci = 0.95, digits = 2)
 classification_pss <- get_classification(new_d,ranef_summary_PSS)
 
-# 5. Build a new function to get the classification performance 
-# Group results are in "classification_..."
-# The predictive variables are in predictive_df and you need to choose the sums or the items
-## Functions - Classification functions ####
+# 6. Build a new function to get the classification performance 
 classification_metrics <- function(true_labels, predicted_labels,levels=c("resilient", "average", "non_resilient")) {
   # Convert to factors with same levels
   true_labels <- factor(true_labels, levels = levels)
@@ -878,21 +885,19 @@ remove_high_vif <- function(df, predictors, threshold = 5) {
   return(kept_predictors)
 }
 
-estimation_classification_cv <- function(df, adversity_string, outcome_string, bins, list_group_names, predictors, k = 5, seed = 123){
+estimation_classification_cv <- function(predictive_df, classification_df, predictors,list_group_names, k = 5, seed = 123){
   set.seed(seed)
   res <- data.frame()
+   df <- predictive_df
   
-  # Get the groupings once, from the full dataset
-  res_data_train <- adjusted_fit(df, adversity_string, outcome_string)
-  df_result <- get_all_groups(df, adversity_string, outcome_string, bins, res_data_train, visualization = FALSE)$df_result
   # Remove high VIF predictors
-  predictors <- remove_high_vif(df, predictors, threshold = 5)
+  predictors <- remove_high_vif(predictive_df, predictors, threshold = 5)
   
   for(i in 1:length(list_group_names)){
     group_name <- list_group_names[[i]]
     print(paste("Running CV for group:", group_name))
-    
-    df[["groups"]] <- as.factor(df_result[[group_name]])
+    df[["groups"]] <- as.factor(classification_df[[group_name]])
+    print(head(df[["groups"]]))
     
     # Create folds (stratified)
     folds <- createFolds(df$groups, k = k, list = TRUE, returnTrain = FALSE)
@@ -954,7 +959,20 @@ estimation_classification_cv <- function(df, adversity_string, outcome_string, b
   return(res)
 }
 
-## Functions - Visualization of classification results functions ####
+predictors_items <- c(bfi,cdrisk,cerq,cope,ctq,fsozu,gpass,pas_content,gse,ielc,le,lotr,"id","age","income","employment_status","gender")
+predictors_sum <- c("bfi_sum","cdrisk_sum","cerq_sum","ctq_sum","fsozu_sum","gpass_sum","pas_content_sum","gse_sum","ielc_sum","le_sum","lotr_sum","id","age","income","employment_status","gender",
+                    "able","verl","emu","ruck","poum","hum","akbe","aldro","insun","ause","plan","akze","sebe","reli")
+
+to_test <- paste0("class_",seq(from=0,to=1,by=0.05))
+# sums and subscales
+df_perf_dh <- estimation_classification_cv(predictive_df,classification_dh,predictors_sum,list_group_names = to_test ,k=10)
+df_perf_pss <- estimation_classification_cv(predictive_df,classification_pss,predictors_sum,list_group_names = to_test ,k=10)
+
+# items
+df_perf_dh_items <- estimation_classification_cv(predictive_df,classification_dh,predictors_items,list_group_names = to_test ,k=10)
+df_perf_pss_items <- estimation_classification_cv(predictive_df,classification_pss,predictors_items,list_group_names = to_test ,k=10)
+
+# 7. Visualization
 comparison_accuracy_null_model_classifier <- function(df_perf){
   df_long <- df_perf %>%
     pivot_longer(cols = c(accuracy, null_model),
@@ -980,11 +998,8 @@ comparison_accuracy_null_model_classifier <- function(df_perf){
   
   return(plot)
 }
-
-visualization_recall_precision <- function(df_perf){
-  criteria_index <- df_perf$support_average>=df_perf$support_resilient & df_perf$support_average>=df_perf$support_non_resilient & df_perf$recall_resilient>0.0001 & df_perf$precision_resilient>0.0001
-  df_perf_class_comparison <- df_perf[criteria_index,]
-  
+visualization_recall_precision <- function(df_perf,list_groups){
+  df_perf_class_comparison <- df_perf %>% filter(group_name %in% list_groups)
   ggplot(df_perf_class_comparison,aes(x=1-recall_resilient,y=precision_resilient,label=group_name))+
     geom_point(shape=19,size=1.5)+
     ggrepel::geom_text_repel(size = 3, max.overlaps = Inf, box.padding = 0.3, point.padding = 0.2)+
@@ -996,4 +1011,20 @@ visualization_recall_precision <- function(df_perf){
     theme_minimal()
 }
 
+## A
+# sums and subscales
+# DH
+comparison_accuracy_null_model_classifier(df_perf_dh)
+visualization_recall_precision(df_perf_dh,to_test)
+# PSS
+comparison_accuracy_null_model_classifier(df_perf_pss)
+visualization_recall_precision(df_perf_pss,to_test)
+
+# items
+# DH
+comparison_accuracy_null_model_classifier(df_perf_dh_items)
+visualization_recall_precision(df_perf_dh_items,to_test)
+# PSS
+comparison_accuracy_null_model_classifier(df_perf_pss_items)
+visualization_recall_precision(df_perf_pss_items,to_test)
 

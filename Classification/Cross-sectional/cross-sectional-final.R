@@ -939,10 +939,8 @@ comparison_accuracy_null_model_classifier <- function(df_perf){
   return(plot)
 }
 
-visualization_recall_precision <- function(df_perf){
-  criteria_index <- df_perf$support_average>=df_perf$support_resilient & df_perf$support_average>=df_perf$support_non_resilient & df_perf$recall_resilient>0.0001 & df_perf$precision_resilient>0.0001
-  df_perf_class_comparison <- df_perf[criteria_index,]
-  
+visualization_recall_precision <- function(df_perf,list_groups){
+  df_perf_class_comparison <- df_perf %>% filter(group_name %in% list_groups)
   ggplot(df_perf_class_comparison,aes(x=1-recall_resilient,y=precision_resilient,label=group_name))+
     geom_point(shape=19,size=1.5)+
     ggrepel::geom_text_repel(size = 3, max.overlaps = Inf, box.padding = 0.3, point.padding = 0.2)+
@@ -1180,7 +1178,7 @@ df_perf_cv_dh <- estimation_classification_cv(
 
 #Visualization
 comparison_accuracy_null_model_classifier(df_perf_cv_dh)
-visualization_recall_precision(df_perf_cv_dh)
+visualization_recall_precision(df_perf_cv_dh,groups_to_test)
 
 
 ## Application - Classification performance (Items) ####
@@ -1258,7 +1256,7 @@ df_perf_cv_dh_items <- estimation_classification_cv(
 )
 #Visualization
 comparison_accuracy_null_model_classifier(df_perf_cv_dh_items)
-visualization_recall_precision(df_perf_cv_dh_items)
+visualization_recall_precision(df_perf_cv_dh_items,groups_to_test)
 
 
 
