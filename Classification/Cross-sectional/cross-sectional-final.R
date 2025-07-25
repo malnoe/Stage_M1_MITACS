@@ -3,12 +3,12 @@
 ## Packages ####
 library(dplyr) # dataframe managment
 library(ggplot2) # ploting
-library(ggrepel)
+library(ggrepel) # ploting
 library(car)  # For VIF
 library(caret)  # for createFolds
-library(randomForest)
+library(randomForest) #randomForest
 library(tidyr) # dataframe management
-library(gridExtra) # plotinh
+library(gridExtra) # ploting
 library(haven) # read sav data
 library(missForest) # to impute data
 library(olsrr) # influence statistic

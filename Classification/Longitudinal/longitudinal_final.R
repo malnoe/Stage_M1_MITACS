@@ -1,25 +1,33 @@
-# Longitudinal study
+# Longitudinal study on LORA
 
 ## Packages ####
-library(ggplot2)
-library(dplyr)
-library(rjags)
-library(SSranef)
-library(tidyr)
-library(missForest)
+library(ggplot2) # Ploting
+library(dplyr) # Dataframe managment
+library(rjags) # Spike and slab
+library(SSranef) # Spike and slab
+library(tidyr) # Dataframe managment
+library(missForest) # MissForest, missing data
+library(randomForest) # Random forest
+library(car)  # VIF
+library(caret)  # CreateFolds, cross-validation
 
 
-## Import the data and the functions ####
+## Set-up and Rdata ####
 original_df <- readRDS("C:/Users/garan/Documents/Ecole/M1/Stage/Internship_repo/Classification/Longitudinal/LORA/ds_forJan.rds")
-load("~/Ecole/M1/Stage/Internship_repo/Classification/Longitudinal/LORA/longitudinal_work_data.RData")
+load("~/Ecole/M1/Stage/Internship_repo/Classification/Longitudinal/longitudinal_work_data.RData")
 
-## Select, recode and sum variables and clean dataframe ####
-# Select relevant variables and lines and create the week variable
+## Data preparation ####
+
+# Select main variables
 dh_variables <- paste0("dh_",c(1:28,44:58))
 ghq_variables <- paste0("ghq_", 1:28)
 variables <- c("id","age","gender",ghq_variables,paste0("pss_",1:10),dh_variables)
 df <- original_df[1:30966,variables]
+
+# Creat week variable
 df[["week"]] <- rep(0:25,1191)
+
+# Format dataframe
 df <- as.data.frame(lapply(df, function(x) as.numeric(as.character(x))))
 
 # Create a variable indicating if the participant was there or not
@@ -37,9 +45,8 @@ for (variable in variables_to_recode) {
   df[[inverse_var]] <- ifelse(df[[variable]] %in% 0:4, 4 - df[[variable]], NA)
 }
 
-# Build total scores
+# Build total scores for main variables
 pss_variables <- c(paste0("pss_",c(1:3,6,9,10)),paste0("pss_",c(4, 5, 7, 8),"_inverse"))
-
 
 df[["pss_sum"]] <- rowSums(df[,pss_variables],na.rm = TRUE)
 df[["ghq_sum"]] <- rowSums(df[,ghq_variables],,na.rm = TRUE)
@@ -49,8 +56,10 @@ df[["dh_sum"]] <- rowSums(df[,dh_variables],,na.rm = TRUE)
 final_variables <- c("id","week","present","age","gender","pss_sum","ghq_sum","dh_sum")
 df <- df[,final_variables]
 
+## Participation diagnostic and selection of individuals ####
 
-## Diagnostic of how many people participated how many times ####
+# We build a dataframe with the number of participant each weeks and the number of
+# participants who partcipated all weeks until the considered week
 df_participation <- df %>%
   filter(present) %>%
   count(week, name = "number_participants")
@@ -77,26 +86,30 @@ for (week_number in 1:25) {
 df_participation <- df_participation %>%
   left_join(df_full_attendance, by = "week")
 
-## Selection of participants ####
-
-# If we want over 500 people without interruption -> week 12 -> 515 people
+# We chose the maximum number week that would allow us to have 500 of more
+# participants present every week. According to df_participation it is week 12.
 participants_full_12 <- df %>%
   filter(week <= 12) %>%
   group_by(id) %>%
   summarise(n_weeks_present = sum(present), .groups = "drop") %>%
   filter(n_weeks_present == 12)
 
-df_present_full_12 <- df %>%
+# d is the data frame with the corresponding individuals.
+d <- df %>%
   filter(id %in% participants_full_12$id,week>0,week<=12)
 
-d <- df_present_full_12
+## Residualization / Construction of a measurment of resilience ####
 
+# We want to build two variables : 
+# resilience for the GHQ~PSS model -> residuals_ghq_pss
+# resilience for the GHQ~DH model -> residuals_ghq_dh
 
-## Residualization ####
+# Initialization with NAs
 d[["residuals_ghq_pss"]] <- NA
 d[["residuals_ghq_dh"]] <- NA
 
-
+# Loop to do the residualization every week, applying influence statistics
+# to put aside overly-influential individuals when there are enough individuals
 for(adversity in c("pss_sum","dh_sum")){
   for(week_number in 1:25){
     # Get the people present that week
@@ -114,7 +127,7 @@ for(adversity in c("pss_sum","dh_sum")){
       used_rows <- as.numeric(rownames(used_data))
       original_indices <- used_rows[influencial_points]
       
-      # Cleaned data for the LM
+      # Cleaned data for the linear model
       df_clean <- data_regression[-original_indices, ]
       
       # Verify that there are at least two points for the adjusted regression
@@ -138,113 +151,80 @@ for(adversity in c("pss_sum","dh_sum")){
   }
 }
 
+## Classification : resilient / average / non-resilient -> spike and slab method ####
 
-## SaS : Intercept only -> alpha ####
-
-# GHQ~PSS
+# Model GHQ~PSS
 alpha_pss <- ss_ranef_alpha(y=d$residuals_ghq_pss, unit=d$id)
-posterior_summary(alpha_pss, ci = 0.90, digits = 2)
-ranef_summary(alpha_pss, ci = 0.95, digits = 2)
-caterpillar_plot(alpha_pss, col_id = FALSE)
-pip_plot(alpha_pss, col_id = FALSE)
-
-
-# GHQ~DH
+# Model GHQ~DH
 alpha_dh <- ss_ranef_alpha(y=d$residuals_ghq_dh, unit=d$id)
-posterior_summary(alpha_dh, ci = 0.90, digits = 2)
-ranef_summary(alpha_dh, ci = 0.95, digits = 2)
-caterpillar_plot(alpha_dh,col_id = FALSE)
-pip_plot(alpha_dh,col_id = FALSE)
-
 
 # Function to get the number of people that are categorized as non-average depending on the threshold for the PIP
 pct_PIP <- function(alpha_res,percentages){
-  res <- data.frame(PIP=c(),pct_non_average=c(),pct_resilient=c(),pct_vulnerable=c())
+  res <- data.frame(PIP=c(),pct_non_average=c(),pct_resilient=c(),pct_non_resilient=c())
   for(percentage in percentages){
     ranef_sum <- ranef_summary(alpha_res, ci = 0.95, digits = 2)
     pct_resilient <- sum(ranef_sum$PIP>=percentage&ranef_sum$Post.mean<0,na.rm=TRUE)/515*100
-    pct_vulnerable <- sum(ranef_sum$PIP>=percentage&ranef_sum$Post.mean>0,na.rm=TRUE)/515*100
-    res <- rbind(res,data.frame(PIP=c(percentage),pct_non_average=c(pct_resilient+pct_vulnerable),pct_resilient=c(pct_resilient),pct_vulnerable=c(pct_vulnerable)))
+    pct_non_resilient <- sum(ranef_sum$PIP>=percentage&ranef_sum$Post.mean>0,na.rm=TRUE)/515*100
+    res <- rbind(res,data.frame(PIP=c(percentage),pct_non_average=c(pct_resilient+pct_non_resilient),pct_resilient=c(pct_resilient),pct_non_resilient=c(pct_non_resilient)))
   }
   return(res)
 }
 
-pct_PIP_alpha_pss<- pct_PIP(alpha_pss,seq(from=0.5,to=1,by=0.05))
-pct_PIP_alpha_dh<- pct_PIP (alpha_dh,seq(from=0.5,to=1,by=0.05))
-View(pct_PIP_alpha_pss)
-View(pct_PIP_alpha_dh)
 
-# Repartition of PIP
-summary(ranef_summary(alpha_dh, ci = 0.95, digits = 2)$PIP)
-summary(ranef_summary(alpha_pss, ci = 0.95, digits = 2)$PIP)
-
-
-# Visualization 
-# PSS
-df_long <- pct_PIP_alpha_pss %>%
-  mutate(pct_average = 100 - pct_non_average) %>%
-  pivot_longer(cols = c(pct_resilient, pct_vulnerable, pct_average),
-               names_to = "group",
-               values_to = "percentage") %>%
-  mutate(group = dplyr::recode(group,
-                               "pct_resilient" = "Resilient",
-                               "pct_vulnerable" = "Vulnerable",
-                               "pct_average" = "Average"))
-
-ggplot(df_long, aes(x = PIP, y = percentage, color = group)) +
-  geom_line(linewidth = 1.8) +
-  geom_point(size=2) +
-  labs(title = "Group Proportions by PIP for GHQ~PSS",
-       x = "PIP",
-       y = "Percentage",
-       color = "Group") +
-  ylim(0, 100) +
-  scale_color_manual(values = c("Average" = "gray10",
-                                "Resilient" = "gray40",
-                                "Vulnerable" = "gray80")) +
-  theme_minimal() +
-  theme(
-    plot.title = element_text(size = 16),
-    legend.title = element_text(size = 16),
-    legend.text = element_text(size = 16),
-    axis.title = element_text(size = 16),
-    axis.text = element_text(size = 16)
-  )
+# Results GHQ~PSS
+posterior_summary(alpha_pss, ci = 0.90, digits = 2) # Summary of general variable of the model
+ranef_summary(alpha_pss, ci = 0.95, digits = 2) # Summary of personal variable of the model
+caterpillar_plot(alpha_pss, col_id = FALSE) # Caterpilar plot
+pip_plot(alpha_pss, col_id = FALSE) # Values of PIP depending on theta
+pct_PIP_alpha_pss<- pct_PIP(alpha_pss,seq(from=0.5,to=1,by=0.05)) # Classification depending on PIP threshold
+summary(ranef_summary(alpha_pss, ci = 0.95, digits = 2)$PIP) # Distribution of PIP
 
 
+# Results GHQ~DH
+posterior_summary(alpha_dh, ci = 0.90, digits = 2)# Summary of general variable of the model
+ranef_summary(alpha_dh, ci = 0.95, digits = 2)# Summary of personal variable of the model
+caterpillar_plot(alpha_dh,col_id = FALSE)# Caterpilar plot
+pip_plot(alpha_dh,col_id = FALSE)# Values of PIP depending on theta
+pct_PIP_alpha_dh<- pct_PIP (alpha_dh,seq(from=0.5,to=1,by=0.05))# Classification depending on PIP threshold
+summary(ranef_summary(alpha_dh, ci = 0.95, digits = 2)$PIP)# Distribution of PIP
 
-# DH
-df_long <- pct_PIP_alpha_dh %>%
-  mutate(pct_average = 100 - pct_non_average) %>%
-  pivot_longer(cols = c(pct_resilient, pct_vulnerable, pct_average),
-               names_to = "group",
-               values_to = "percentage") %>%
-  mutate(group =dplyr::recode(group,
-                              pct_resilient = "Resilient",
-                              pct_vulnerable = "Vulnerable",
-                              pct_average = "Average"))
+## Functions - Visualization of the results ####
 
-ggplot(df_long, aes(x = PIP, y = percentage, color = group)) +
-  geom_line(linewidth = 1.8) +
-  geom_point(size=2) +
-  labs(title = "Group Proportions by PIP for GHQ~DH",
-       x = "PIP",
-       y = "Percentage",
-       color = "Group") +
-  ylim(0, 100) +
-  scale_color_manual(values = c("Average" = "gray10",
-                                "Resilient" = "gray40",
-                                "Vulnerable" = "gray80")) +
-  theme_minimal() +
-  theme(
-    plot.title = element_text(size = 16),
-    legend.title = element_text(size = 16),
-    legend.text = element_text(size = 16),
-    axis.title = element_text(size = 16),
-    axis.text = element_text(size = 16)
-  )
+# Function to visualize the variation of the size of classes depending on PIP threshold
+visualization_variation_size_classes <- function(pct_PIP_alpha,title){
+  df_long <- pct_PIP_alpha %>%
+    mutate(pct_average = 100 - pct_non_average) %>%
+    pivot_longer(cols = c(pct_resilient, pct_non_resilient, pct_average),
+                 names_to = "group",
+                 values_to = "percentage") %>%
+    mutate(group = dplyr::recode(group,
+                                 "pct_resilient" = "Resilient",
+                                 "pct_non_resilient" = "Non-resilient",
+                                 "pct_average" = "Average"))
+  
+  plot <- ggplot(df_long, aes(x = PIP, y = percentage, color = group)) +
+    geom_line(linewidth = 1.8) +
+    geom_point(size=2) +
+    labs(title = title,
+         x = "PIP",
+         y = "Percentage",
+         color = "Group") +
+    ylim(0, 100) +
+    scale_color_manual(values = c("Average" = "gray10",
+                                  "Resilient" = "gray40",
+                                  "Non-resilient" = "gray80")) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 16),
+      legend.title = element_text(size = 16),
+      legend.text = element_text(size = 16),
+      axis.title = element_text(size = 16),
+      axis.text = element_text(size = 16)
+    )
+  return(plot)
+}
 
-## Visualization basic with all individuals ####
+
 visualization_longitudinal <- function(df, ranef_summary, posterior_summary, PIP_threshold,type="PSS") {
   
   # Create table for random effects
@@ -256,7 +236,7 @@ visualization_longitudinal <- function(df, ranef_summary, posterior_summary, PIP
       class = case_when(
         PIP < PIP_threshold ~ "Average",
         PIP >= PIP_threshold & Post.mean < 0 ~ "Resilient",
-        PIP >= PIP_threshold & Post.mean > 0 ~ "Vulnerable",
+        PIP >= PIP_threshold & Post.mean > 0 ~ "Non-resilient",
         TRUE ~ "Average"
       )
     )
@@ -288,7 +268,7 @@ visualization_longitudinal <- function(df, ranef_summary, posterior_summary, PIP
                hjust = 1.1, vjust = -0.5, color = "black", size = 3) +
       
       annotate("text", x = Inf, y = min_positive_theta,
-               label = paste0("Min θ (vulnerable) = ", round(min_positive_theta, 2)),
+               label = paste0("Min θ (non_resilient) = ", round(min_positive_theta, 2)),
                hjust = 1.1, vjust = -0.5, color = "firebrick", size = 3) +
       
       annotate("text", x = Inf, y = max_negative_theta,
@@ -298,7 +278,7 @@ visualization_longitudinal <- function(df, ranef_summary, posterior_summary, PIP
       scale_color_manual(values = c(
         "Average" = "gray80",
         "Resilient" = "steelblue",
-        "Vulnerable" = "firebrick"
+        "Non-resilient" = "firebrick"
       )) +
       
       labs(
@@ -326,7 +306,7 @@ visualization_longitudinal <- function(df, ranef_summary, posterior_summary, PIP
                hjust = 1.1, vjust = -0.5, color = "black", size = 3) +
       
       annotate("text", x = Inf, y = min_positive_theta,
-               label = paste0("Min θ (vulnerable) = ", round(min_positive_theta, 2)),
+               label = paste0("Min θ (non_resilient) = ", round(min_positive_theta, 2)),
                hjust = 1.1, vjust = -0.5, color = "firebrick", size = 3) +
       
       annotate("text", x = Inf, y = max_negative_theta,
@@ -336,7 +316,7 @@ visualization_longitudinal <- function(df, ranef_summary, posterior_summary, PIP
       scale_color_manual(values = c(
         "Average" = "gray80",
         "Resilient" = "steelblue",
-        "Vulnerable" = "firebrick"
+        "Non-resilient" = "firebrick"
       )) +
       
       labs(
@@ -363,7 +343,7 @@ visualization_longitudinal <- function(df, ranef_summary, posterior_summary, PIP
              hjust = 1.1, vjust = -0.5, color = "black", size = 3) +
     
     annotate("text", x = Inf, y = min_positive_theta,
-             label = paste0("Min θ (vulnerable) = ", round(min_positive_theta, 2)),
+             label = paste0("Min θ (non_resilient) = ", round(min_positive_theta, 2)),
              hjust = 1.1, vjust = -0.5, color = "firebrick", size = 3) +
     
     annotate("text", x = Inf, y = max_negative_theta,
@@ -373,7 +353,7 @@ visualization_longitudinal <- function(df, ranef_summary, posterior_summary, PIP
     scale_color_manual(values = c(
       "Average" = "gray80",
       "Resilient" = "steelblue",
-      "Vulnerable" = "firebrick"
+      "Non-resilient" = "firebrick"
     )) +
     
     labs(
@@ -386,16 +366,7 @@ visualization_longitudinal <- function(df, ranef_summary, posterior_summary, PIP
     theme_minimal()
 }
 
-# DH
-ranef_summary_DH <- ranef_summary(alpha_dh, ci = 0.95, digits = 2)
-posterior_sumarry_DH <- posterior_summary(alpha_dh, ci = 0.90, digits = 2)
-visualization_longitudinal(d,ranef_summary_DH,posterior_sumarry_DH,0.99,type="DH")
-# PSS
-ranef_summary_PSS <- ranef_summary(alpha_pss, ci = 0.95, digits = 2)
-posterior_sumarry_PSS <- posterior_summary(alpha_pss, ci = 0.90, digits = 2)
-visualization_longitudinal(d,ranef_summary_PSS,posterior_sumarry_PSS,0.99,type="PSS")
-
-## Visualization main trajectories with confidence intervals ####
+# Visualization of the main trajectories for one threshold with confidence intervals
 visualization_main_trajectories <- function(df, ranef_summary, posterior_summary, PIP_threshold,type="PSS"){
   # Create table for random effects
   id_list <- unique(df$id)
@@ -406,7 +377,7 @@ visualization_main_trajectories <- function(df, ranef_summary, posterior_summary
       class = case_when(
         PIP < PIP_threshold ~ "Average",
         PIP >= PIP_threshold & Post.mean < 0 ~ "Resilient",
-        PIP >= PIP_threshold & Post.mean > 0 ~ "Vulnerable",
+        PIP >= PIP_threshold & Post.mean > 0 ~ "Non-resilient",
         TRUE ~ "Average"
       )
     )
@@ -458,12 +429,12 @@ visualization_main_trajectories <- function(df, ranef_summary, posterior_summary
     scale_color_manual(values = c(
       "Average" = "gray60",
       "Resilient" = "steelblue",
-      "Vulnerable" = "firebrick"
+      "Non-resilient" = "firebrick"
     )) +
     scale_fill_manual(values = c(
       "Average" = "gray80",
       "Resilient" = "steelblue",
-      "Vulnerable" = "firebrick"
+      "Non-resilient" = "firebrick"
     )) +
     
     labs(
@@ -476,10 +447,8 @@ visualization_main_trajectories <- function(df, ranef_summary, posterior_summary
     ) +
     theme_minimal()
 }
-visualization_main_trajectories(d,ranef_summary_PSS,posterior_sumarry_PSS,0.99,type="PSS")
-visualization_main_trajectories(d,ranef_summary_DH,posterior_sumarry_DH,0.99,type="DH")
 
-## Visualization main trajectories for multiple thresholds ####
+# Visualization of main trajectories of groups for different thresholds
 visualization_trajectories_multiple_thresholds <- function(df, ranef_summary, posterior_summary, thresholds, type ="PSS") {
   
   id_list <- unique(df$id)
@@ -492,7 +461,7 @@ visualization_trajectories_multiple_thresholds <- function(df, ranef_summary, po
         class = case_when(
           PIP < PIP_threshold ~ "Average",
           PIP >= PIP_threshold & Post.mean < 0 ~ "Resilient",
-          PIP >= PIP_threshold & Post.mean > 0 ~ "Vulnerable",
+          PIP >= PIP_threshold & Post.mean > 0 ~ "Non-resilient",
           TRUE ~ "Average"
         )
       )
@@ -541,7 +510,7 @@ visualization_trajectories_multiple_thresholds <- function(df, ranef_summary, po
     scale_color_manual(values = c(
       "Average" = "gray10",
       "Resilient" = "gray40",
-      "Vulnerable" = "gray80"
+      "Non-resilient" = "gray80"
     )) +
     scale_linetype_manual(
       values = c("solid", "dashed", "dotdash", "twodash")[1:length(thresholds)],
@@ -565,10 +534,40 @@ visualization_trajectories_multiple_thresholds <- function(df, ranef_summary, po
       axis.text = element_text(size = 16)
     )
 }
-visualization_trajectories_multiple_thresholds(d,ranef_summary_PSS,posterior_sumarry_PSS,list(0.70,0.8,0.9),type="PSS")
-visualization_trajectories_multiple_thresholds(d,ranef_summary_DH,posterior_sumarry_DH,list(0.70,0.8,0.9),type="DH")
 
-## Classification performance ####
+
+## Application - Visualization of the results ####
+
+# Variations of class size as a function of the PIP threshold
+# DH
+visualization_variation_size_classes(pct_PIP_alpha_dh,"Group Proportions by PIP for GHQ~DH")
+# PSS
+visualization_variation_size_classes(pct_PIP_alpha_pss,"Group Proportions by PIP for GHQ~PSS")
+
+# Trajectories of all individuals colored depending on their group
+# DH
+ranef_summary_DH <- ranef_summary(alpha_dh, ci = 0.95, digits = 2)
+posterior_sumarry_DH <- posterior_summary(alpha_dh, ci = 0.90, digits = 2)
+visualization_longitudinal(d,ranef_summary_DH,posterior_sumarry_DH,0.99,type="DH")
+# PSS
+ranef_summary_PSS <- ranef_summary(alpha_pss, ci = 0.95, digits = 2)
+posterior_sumarry_PSS <- posterior_summary(alpha_pss, ci = 0.90, digits = 2)
+visualization_longitudinal(d,ranef_summary_PSS,posterior_sumarry_PSS,0.99,type="PSS")
+
+# Visualization of the main trajectories for one threshold with confidence intervals
+# DH
+visualization_main_trajectories(d,ranef_summary_DH,posterior_sumarry_DH,0.99,type="DH")
+# PSS
+visualization_main_trajectories(d,ranef_summary_PSS,posterior_sumarry_PSS,0.99,type="PSS")
+
+# Visualization of main trajectories of groups for different thresholds
+# DH
+visualization_trajectories_multiple_thresholds(d,ranef_summary_DH,posterior_sumarry_DH,list(0.70,0.8,0.9),type="DH")
+# PSS
+visualization_trajectories_multiple_thresholds(d,ranef_summary_PSS,posterior_sumarry_PSS,list(0.70,0.8,0.9),type="PSS")
+
+
+## Evaluation of predictive power : Data preparation - Individuals selection, residualization and spike and slab ####
 
 # 1. Get the predictors in the original dataframe and select the individuals who have enough to build a new_d
 bfi <- paste0("bfi_",1:10)
@@ -597,7 +596,6 @@ dim(predictive_df)
 na_ratio <- rowMeans(is.na(predictive_df), na.rm = FALSE)
 indices <- which(na_ratio > 0.3 & !is.na(na_ratio))  # on exclut les NA
 predictive_df <- predictive_df[-indices,]
-dim(predictive_df)
 
 # We do missForest
 predictive_df.mf <- missForest::missForest(xmis = predictive_df)
@@ -693,11 +691,11 @@ predictive_df[["ielc_sum"]] <- rowSums(predictive_df[,ielc],na.rm = TRUE)
 predictive_df[["le_sum"]] <- rowSums(predictive_df[,le],na.rm = TRUE)
 predictive_df[["lotr_sum"]] <- rowSums(predictive_df[,lotr],na.rm = TRUE)
 
-
-# 2. Build new_d with inly the people who have enough predictive data (ie id in predictive_df)
+# 2. Build new_d with inly the people who have enough predictive data (ie id in predictive_df) to get the pss, dh, ghq
+# and also have people who participated all 12 first weeks
 new_d <- d %>% filter(id %in% predictive_df$id) %>% dplyr::select(id,week,present,pss_sum,dh_sum,ghq_sum)
 
-# 3. Redo the residualization
+# 3. Redo the residualization since we have less people
 new_d[["residuals_ghq_pss"]] <- NA
 new_d[["residuals_ghq_dh"]] <- NA
 
@@ -745,20 +743,16 @@ for(adversity in c("pss_sum","dh_sum")){
 # 4. Redo the spike and slab
 # GHQ~PSS
 new_alpha_pss <- ss_ranef_alpha(y=new_d$residuals_ghq_pss, unit=new_d$id)
-posterior_summary(new_alpha_pss, ci = 0.90, digits = 2)
-ranef_summary(new_alpha_pss, ci = 0.95, digits = 2)
-caterpillar_plot(new_alpha_pss, col_id = FALSE)
-pip_plot(new_alpha_pss, col_id = FALSE)
+pct_PIP_new_alpha_pss<- pct_PIP(new_alpha_pss,seq(from=0,to=1,by=0.05))
 
 
 # GHQ~DH
 new_alpha_dh <- ss_ranef_alpha(y=new_d$residuals_ghq_dh, unit=new_d$id)
-posterior_summary(new_alpha_dh, ci = 0.90, digits = 2)
-ranef_summary(new_alpha_dh, ci = 0.95, digits = 2)
-caterpillar_plot(new_alpha_dh,col_id = FALSE)
-pip_plot(new_alpha_dh,col_id = FALSE)
+pct_PIP_new_alpha_dh<- pct_PIP (new_alpha_dh,seq(from=0,to=1,by=0.05))
 
-# 5. Get the corresponding classification depeding on the threshold
+## Evaluation of predictive power : Classification depending on the threshold ####
+
+# Function to get the classification for each individual
 get_classification <- function(d,ranef_summary,list_thresholds=seq(from = 0, to = 1, by = 0.05)){
   classifications <- tibble(id = unique(d$id))
   
@@ -784,6 +778,7 @@ get_classification <- function(d,ranef_summary,list_thresholds=seq(from = 0, to 
   return(classifications)
 }
 
+# Application to our data
 #DH
 ranef_summary_DH <- ranef_summary(new_alpha_dh, ci = 0.95, digits = 2)
 classification_dh <- get_classification(new_d,ranef_summary_DH)
@@ -791,8 +786,10 @@ classification_dh <- get_classification(new_d,ranef_summary_DH)
 ranef_summary_PSS <- ranef_summary(new_alpha_pss, ci = 0.95, digits = 2)
 classification_pss <- get_classification(new_d,ranef_summary_PSS)
 
-# 6. Build a new function to get the classification performance 
-classification_metrics <- function(true_labels, predicted_labels,levels=c("resilient", "average", "non_resilient")) {
+## Evaluation of predictive power : Functions for estimation and visualization of results ####
+
+# Function to get the metrics (accuracy, precision, recall ...)
+classification_metrics <- function(true_labels, predicted_labels,levels=c("resilient", "average", "non-resilient")) {
   # Convert to factors with same levels
   true_labels <- factor(true_labels, levels = levels)
   predicted_labels <- factor(predicted_labels, levels = levels)
@@ -861,6 +858,7 @@ classification_metrics <- function(true_labels, predicted_labels,levels=c("resil
   return(results)
 }
 
+# Function to apply VIF methodology
 remove_high_vif <- function(df, predictors, threshold = 5) {
   # Garder seulement les variables non constantes
   non_constant <- predictors[sapply(df[, predictors, drop = FALSE], function(x) length(unique(x)) > 1)]
@@ -885,10 +883,11 @@ remove_high_vif <- function(df, predictors, threshold = 5) {
   return(kept_predictors)
 }
 
+# Function to dp the estimation of the predictive power of different thresholds
 estimation_classification_cv <- function(predictive_df, classification_df, predictors,list_group_names, k = 5, seed = 123){
   set.seed(seed)
   res <- data.frame()
-   df <- predictive_df
+  df <- predictive_df
   
   # Remove high VIF predictors
   predictors <- remove_high_vif(predictive_df, predictors, threshold = 5)
@@ -911,7 +910,6 @@ estimation_classification_cv <- function(predictive_df, classification_df, predi
       
       # Avoid crashing
       train_data$groups <- factor(train_data$groups, levels = levels(df$groups))
-      
       # Fit random forest
       formula <- as.formula(paste("groups ~", paste(predictors, collapse = " + ")))
       rf_model <- randomForest(formula, data = train_data, ntree = 500, mtry = floor(sqrt(length(predictors))), importance = FALSE)
@@ -930,8 +928,8 @@ estimation_classification_cv <- function(predictive_df, classification_df, predi
       return(mean(values, na.rm = TRUE))
     }
     
-    support_total <- average_metric("support", "resilient") + average_metric("support", "average") + average_metric("support", "non_resilient")
-    null_model <- max(average_metric("support", "resilient"), average_metric("support", "average"), average_metric("support", "non_resilient")) / support_total
+    support_total <- average_metric("support", "resilient") + average_metric("support", "average") + average_metric("support", "non-resilient")
+    null_model <- max(average_metric("support", "resilient"), average_metric("support", "average"), average_metric("support", "non-resilient")) / support_total
     
     res <- rbind(res, data.frame(
       group_name = group_name,
@@ -947,32 +945,19 @@ estimation_classification_cv <- function(predictive_df, classification_df, predi
       precision_average = average_metric("precision_per_class", "average"),
       recall_average = average_metric("recall_per_class", "average"),
       f1score_average = average_metric("f1_per_class", "average"),
-      precision_non_resilient = average_metric("precision_per_class", "non_resilient"),
-      recall_non_resilient = average_metric("recall_per_class", "non_resilient"),
-      f1score_non_resilient = average_metric("f1_per_class", "non_resilient"),
+      precision_non_resilient = average_metric("precision_per_class", "non-resilient"),
+      recall_non_resilient = average_metric("recall_per_class", "non-resilient"),
+      f1score_non_resilient = average_metric("f1_per_class", "non-resilient"),
       support_resilient = average_metric("support", "resilient"),
       support_average = average_metric("support", "average"),
-      support_non_resilient = average_metric("support", "non_resilient")
+      support_non_resilient = average_metric("support", "non-resilient")
     ))
   }
   
   return(res)
 }
 
-predictors_items <- c(bfi,cdrisk,cerq,cope,ctq,fsozu,gpass,pas_content,gse,ielc,le,lotr,"id","age","income","employment_status","gender")
-predictors_sum <- c("bfi_sum","cdrisk_sum","cerq_sum","ctq_sum","fsozu_sum","gpass_sum","pas_content_sum","gse_sum","ielc_sum","le_sum","lotr_sum","id","age","income","employment_status","gender",
-                    "able","verl","emu","ruck","poum","hum","akbe","aldro","insun","ause","plan","akze","sebe","reli")
-
-to_test <- paste0("class_",seq(from=0,to=1,by=0.05))
-# sums and subscales
-df_perf_dh <- estimation_classification_cv(predictive_df,classification_dh,predictors_sum,list_group_names = to_test ,k=10)
-df_perf_pss <- estimation_classification_cv(predictive_df,classification_pss,predictors_sum,list_group_names = to_test ,k=10)
-
-# items
-df_perf_dh_items <- estimation_classification_cv(predictive_df,classification_dh,predictors_items,list_group_names = to_test ,k=10)
-df_perf_pss_items <- estimation_classification_cv(predictive_df,classification_pss,predictors_items,list_group_names = to_test ,k=10)
-
-# 7. Visualization
+# Visualization of the accuracy of thre classifier and the null model as a function of the average group size
 comparison_accuracy_null_model_classifier <- function(df_perf){
   df_long <- df_perf %>%
     pivot_longer(cols = c(accuracy, null_model),
@@ -998,6 +983,8 @@ comparison_accuracy_null_model_classifier <- function(df_perf){
   
   return(plot)
 }
+
+# Visualization of recall and precision for the resilient group
 visualization_recall_precision <- function(df_perf,list_groups){
   df_perf_class_comparison <- df_perf %>% filter(group_name %in% list_groups)
   ggplot(df_perf_class_comparison,aes(x=1-recall_resilient,y=precision_resilient,label=group_name))+
@@ -1011,7 +998,23 @@ visualization_recall_precision <- function(df_perf,list_groups){
     theme_minimal()
 }
 
-## A
+## Evaluation of predictive power : Estimation and results ####
+predictors_items <- c(bfi,cdrisk,cerq,cope,ctq,fsozu,gpass,pas_content,gse,ielc,le,lotr,"id","age","income","employment_status","gender")
+predictors_sum <- c("bfi_sum","cdrisk_sum","cerq_sum","ctq_sum","fsozu_sum","gpass_sum","pas_content_sum","gse_sum","ielc_sum","le_sum","lotr_sum","id","age","income","employment_status","gender",
+                    "able","verl","emu","ruck","poum","hum","akbe","aldro","insun","ause","plan","akze","sebe","reli")
+
+to_test <- paste0("class_",seq(from=0,to=1,by=0.05))
+
+# sums and subscales
+df_perf_dh <- estimation_classification_cv(predictive_df,classification_dh,predictors_sum,list_group_names = to_test ,k=10)
+df_perf_pss <- estimation_classification_cv(predictive_df,classification_pss,predictors_sum,list_group_names = to_test ,k=10)
+
+# items
+df_perf_dh_items <- estimation_classification_cv(predictive_df,classification_dh,predictors_items,list_group_names = to_test ,k=10)
+df_perf_pss_items <- estimation_classification_cv(predictive_df,classification_pss,predictors_items,list_group_names = to_test ,k=10)
+
+
+# Visualization of results / Figures
 # sums and subscales
 # DH
 comparison_accuracy_null_model_classifier(df_perf_dh)
@@ -1027,4 +1030,3 @@ visualization_recall_precision(df_perf_dh_items,to_test)
 # PSS
 comparison_accuracy_null_model_classifier(df_perf_pss_items)
 visualization_recall_precision(df_perf_pss_items,to_test)
-

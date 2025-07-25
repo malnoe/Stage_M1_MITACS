@@ -3,10 +3,10 @@
 ## Packages ####
 library(dplyr) # Dataframe managment and selection
 library(ggplot2) # Visualization
-library(kml)
-library(kml3d)
+library(kml) # Profiling
+library(kml3d) # Profiling
 library(rpart) # Regression tree
-library(tidyLPA) # LPA
+library(tidyLPA) # Profiling LPA
 library(tidyr) # Dataframe managment 
 
 ## Get back to work ####
@@ -31,22 +31,6 @@ LORA[LORA < 0] <- NA
 LORA$present <- !apply(is.na(LORA[ , -(1:3)]), 1, all)
 
 dim(LORA) # 5955 = 5 x 1191
-
-## Contents ####
-
-# Sample size analysis -> look into the available data at each time point
-
-# Week and data selection -> Depending on the results of the sample size analysis, get the weeks needed and also get the variables needed.
-
-# Profiling -> Find latent profiles in the answers to the 
-# Positive Appraisal Style Questionnaire in different ways :
-## Cross-sectional LPA
-## Longitudinal Joint KML3D
-## Longitudinal Content
-## Longitudinal Processes
-
-# Network Analysis ->
-
 
 ## Sample size Analysis #####
 
