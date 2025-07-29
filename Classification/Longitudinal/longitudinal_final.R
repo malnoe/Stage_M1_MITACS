@@ -13,7 +13,7 @@ library(caret)  # CreateFolds, cross-validation
 
 
 ## Set-up and Rdata ####
-original_df <- readRDS("C:/Users/garan/Documents/Ecole/M1/Stage/Internship_repo/Classification/Longitudinal/LORA/ds_forJan.rds")
+original_df <- readRDS("C:/Users/garan/Documents/Ecole/M1/Stage/Internship_repo/Classification/Longitudinal/ds_forJan.rds")
 load("~/Ecole/M1/Stage/Internship_repo/Classification/Longitudinal/longitudinal_work_data.RData")
 
 ## Data preparation ####
@@ -754,7 +754,8 @@ pct_PIP_new_alpha_dh<- pct_PIP (new_alpha_dh,seq(from=0,to=1,by=0.05))
 
 # Function to get the classification for each individual
 get_classification <- function(d,ranef_summary,list_thresholds=seq(from = 0, to = 1, by = 0.05)){
-  classifications <- tibble(id = unique(d$id))
+  id_list <- unique(d$id)
+  classifications <- tibble(id = id_list)
   
   for (PIP_threshold in list_thresholds) {
     
