@@ -141,7 +141,7 @@ LPA_LORA_profiles <- LORAr %>%
   filter(t==1) %>%
   dplyr::select(PAS_content, PAS_process) %>%
   single_imputation() %>%
-  estimate_profiles(2, 
+  estimate_profiles(3, 
                     variances = c("equal"),
                     covariances = c("equal"),nrep = 5)
 
@@ -327,5 +327,11 @@ plot(cldLORA_process,5)
 plot(cldLORA_process,6)
 plot(cldLORA_process,10)
 
-## Network Analysis ####
+## Get clusters ####
+getClusters(cldLORA_content,2,asInteger = 1)
+getClusters(cldLORA_process,2,asInteger = 1)
+getClusters(cld3dPregTemp,2,asInteger = 1)
+LPA_LORA_profiles$model_3_class_2$dff$Class
+
+## Network analysis ####
 

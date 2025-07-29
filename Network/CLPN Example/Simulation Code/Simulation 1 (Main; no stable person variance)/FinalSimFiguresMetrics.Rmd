@@ -1,0 +1,508 @@
+---
+title: "Final Sim Figures/Metrics"
+author: "Ian McCarthy"
+date: "2024-12-11"
+output: html_document
+---
+
+```{r}
+load("NonstationaryDF.RData") #NSsim2_df
+load("StationaryDF.RData") #Ssim2_df
+load("StableNonstationaryDF.RData") #NSsim3_df
+load("StableStationaryDF.RData") #Ssim3_df
+
+MCSE <- function(x, nsims, na.rm = T) {
+  if (sum(is.na(x)) >= 1){
+    x <- x[!is.na(x)]
+    sqrt(var(x) / nsims)
+  }
+  else{
+    sqrt(var(x) / nsims)    
+  }
+}
+
+MCC <- function(TP,TN,FP,FN) {
+  ((TN * TP) - (FN * FP)) / sqrt((TP + FP)*(TP + FN)*(TN+FP)*(TN + FN))
+}
+
+library(tidyverse)
+library(flextable)
+```
+
+Figures both ns and s
+```{r}
+p.labs <- c("p = 5", "p = 7", "p = 9", "p = 16")
+names(p.labs) <- c("5", "7", "9", "16")
+
+sparsity.labs <- c("Density = .5", "Density = .8")
+names(sparsity.labs) <- c("0.5", "0.8")
+
+#Specificity S
+Spec_S <- Ssim2_df %>% filter(!(method == "lvar" & TrueEdgeDist > 1)) %>%
+  group_by(p, n, sparsity, method)%>% 
+  summarize(mu = mean(1-FPR.TN), scale = MCSE(1-FPR.TN, nsim = 2000)) %>% 
+  ggplot(aes(x = as.factor(n), y = mu, color = method, fill = method)) + 
+  geom_bar(stat = "identity", position = position_dodge(1)) + 
+  geom_errorbar(aes(ymax = mu + scale, ymin = mu - scale), 
+                position = position_dodge(1), color = "black", 
+                width = 0.5)+
+  scale_color_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  scale_fill_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  facet_grid(p ~ sparsity, 
+             labeller = labeller( p = as_labeller(p.labs), 
+                                  sparsity = as_labeller(sparsity.labs)
+             )) + 
+  labs(x = "Sample Size", y = "Specificity", fill = "", 
+       color = "", title = "") + 
+  theme_bw()+ 
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 20),
+        plot.title = element_text(size = 22),
+        strip.text.x = element_text(size = 20),
+        strip.text.y = element_text(size = 20))
+
+#Sensitivity S
+TPR_S <- Ssim2_df %>% filter(!(method == "lvar" & TrueEdgeDist > 1)) %>%
+  group_by(p, n, sparsity, method)%>% 
+  summarize(mu = mean(Sens.TP), scale = MCSE(Sens.TP, nsim = 2000)) %>% 
+  ggplot(aes(x = as.factor(n), y = mu, color = method, fill = method)) + 
+  geom_bar(stat = "identity", position = position_dodge(1)) + 
+  geom_errorbar(aes(ymax = mu + scale, ymin = mu - scale), 
+                position = position_dodge(1), color = "black", 
+                width = 0.5)+
+  scale_color_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  scale_fill_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  facet_grid(p ~ sparsity, 
+             labeller = labeller( p = as_labeller(p.labs), 
+                                  sparsity = as_labeller(sparsity.labs)
+             )) + 
+  labs(x = "Sample Size", y = "Sensitivity", fill = "", 
+       color = "") + 
+  theme_bw()+ 
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 20),
+        plot.title = element_text(size = 22),
+        strip.text.x = element_text(size = 20),
+        strip.text.y = element_text(size = 20)) 
+
+#MAE S
+MAE_S <- Ssim2_df %>% filter(!(method == "lvar" & TrueEdgeDist > 1)) %>%
+  group_by(p, n, sparsity, method)%>% 
+  summarize(mu = mean(TrueEdgeDist), scale = MCSE(TrueEdgeDist, nsim = 2000)) %>% 
+  ggplot(aes(x = as.factor(n), y = mu, color = method, fill = method)) + 
+  geom_bar(stat = "identity", position = position_dodge(1)) + 
+  geom_errorbar(aes(ymax = mu + scale, ymin = mu - scale), 
+                position = position_dodge(1), color = "black", 
+                width = 0.5)+
+  scale_color_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  scale_fill_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  facet_grid(p ~ sparsity, 
+             labeller = labeller( p = as_labeller(p.labs), 
+                                  sparsity = as_labeller(sparsity.labs)
+             )) + 
+  labs(x = "Sample Size", y = "Edge Distance (MAE)", fill = "", 
+       color = "") + 
+  theme_bw()+ 
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 20),
+        plot.title = element_text(size = 22),
+        strip.text.x = element_text(size = 20),
+        strip.text.y = element_text(size = 20))
+
+#Matthews correlation S
+MCC_S <- Ssim2_df %>% filter(!(method == "lvar" & TrueEdgeDist > 1)) %>%
+  group_by(p, n, sparsity, method)%>% 
+  summarize(mu = mean(MCC(TP = TP, TN = TN, FP = FP, FN = FN),na.rm = T), scale = MCSE(MCC(TP = TP, TN = TN, FP = FP, FN = FN), nsim = 2000)) %>% 
+  ggplot(aes(x = as.factor(n), y = mu, color = method, fill = method)) + 
+  geom_bar(stat = "identity", position = position_dodge(1)) + 
+  geom_errorbar(aes(ymax = mu + scale, ymin = mu - scale), 
+                position = position_dodge(1), color = "black", 
+                width = 0.5)+
+  scale_color_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  scale_fill_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  facet_grid(p ~ sparsity, 
+             labeller = labeller( p = as_labeller(p.labs), 
+                                  sparsity = as_labeller(sparsity.labs)
+             )) + 
+  labs(x = "Sample Size", y = "Matthew's Correlation Coefficient (MCC)", fill = "", 
+       color = "") + 
+  theme_bw()+ 
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 20),
+        plot.title = element_text(size = 22),
+        strip.text.x = element_text(size = 20),
+        strip.text.y = element_text(size = 20)) 
+
+#Specificity NS
+Spec_NS <- NSsim2_df %>% filter(!(method == "lvar" & TrueEdgeDist > 1)) %>%
+  group_by(p, n, sparsity, method)%>% 
+  summarize(mu = mean(1-FPR.TN), scale = MCSE(1-FPR.TN, nsim = 2000)) %>% 
+  ggplot(aes(x = as.factor(n), y = mu, color = method, fill = method)) + 
+  geom_bar(stat = "identity", position = position_dodge(1)) + 
+  geom_errorbar(aes(ymax = mu + scale, ymin = mu - scale), 
+                position = position_dodge(1), color = "black", 
+                width = 0.5)+
+  scale_color_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  scale_fill_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  facet_grid(p ~ sparsity, 
+             labeller = labeller( p = as_labeller(p.labs), 
+                                  sparsity = as_labeller(sparsity.labs)
+             )) + 
+  labs(x = "Sample Size", y = "Specificity", fill = "", 
+       color = "", title = "") + 
+  theme_bw()+ 
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 20),
+        plot.title = element_text(size = 22),
+        strip.text.x = element_text(size = 20),
+        strip.text.y = element_text(size = 20))
+
+#Sensitivity NS
+TPR_NS <- NSsim2_df %>% filter(!(method == "lvar" & TrueEdgeDist > 1)) %>%
+  group_by(p, n, sparsity, method)%>% 
+  summarize(mu = mean(Sens.TP), scale = MCSE(Sens.TP, nsim = 2000)) %>% 
+  ggplot(aes(x = as.factor(n), y = mu, color = method, fill = method)) + 
+  geom_bar(stat = "identity", position = position_dodge(1)) + 
+  geom_errorbar(aes(ymax = mu + scale, ymin = mu - scale), 
+                position = position_dodge(1), color = "black", 
+                width = 0.5)+
+  scale_color_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  scale_fill_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  facet_grid(p ~ sparsity, 
+             labeller = labeller( p = as_labeller(p.labs), 
+                                  sparsity = as_labeller(sparsity.labs)
+             )) + 
+  labs(x = "Sample Size", y = "Sensitivity", fill = "", 
+       color = "") + 
+  theme_bw()+ 
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 20),
+        plot.title = element_text(size = 22),
+        strip.text.x = element_text(size = 20),
+        strip.text.y = element_text(size = 20)) 
+
+#MAE NS
+MAE_NS <- NSsim2_df %>% filter(!(method == "lvar" & TrueEdgeDist > 1)) %>%
+  group_by(p, n, sparsity, method)%>% 
+  summarize(mu = mean(TrueEdgeDist), scale = MCSE(TrueEdgeDist, nsim = 2000)) %>% 
+  ggplot(aes(x = as.factor(n), y = mu, color = method, fill = method)) + 
+  geom_bar(stat = "identity", position = position_dodge(1)) + 
+  geom_errorbar(aes(ymax = mu + scale, ymin = mu - scale), 
+                position = position_dodge(1), color = "black", 
+                width = 0.5)+
+  scale_color_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  scale_fill_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  facet_grid(p ~ sparsity, 
+             labeller = labeller( p = as_labeller(p.labs), 
+                                  sparsity = as_labeller(sparsity.labs)
+             )) + 
+  labs(x = "Sample Size", y = "Edge Distance (MAE)", fill = "", 
+       color = "") + 
+  theme_bw()+ 
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 20),
+        plot.title = element_text(size = 22),
+        strip.text.x = element_text(size = 20),
+        strip.text.y = element_text(size = 20))
+
+
+#Matthews correlation NS
+MCC_NS <- NSsim2_df %>% filter(!(method == "lvar" & TrueEdgeDist > 1)) %>%
+  group_by(p, n, sparsity, method)%>% 
+  summarize(mu = mean(MCC(TP = TP, TN = TN, FP = FP, FN = FN),na.rm = T), scale = MCSE(MCC(TP = TP, TN = TN, FP = FP, FN = FN), nsim = 2000)) %>% 
+  ggplot(aes(x = as.factor(n), y = mu, color = method, fill = method)) + 
+  geom_bar(stat = "identity", position = position_dodge(1)) + 
+  geom_errorbar(aes(ymax = mu + scale, ymin = mu - scale), 
+                position = position_dodge(1), color = "black", 
+                width = 0.5)+
+  scale_color_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  scale_fill_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  facet_grid(p ~ sparsity, 
+             labeller = labeller( p = as_labeller(p.labs), 
+                                  sparsity = as_labeller(sparsity.labs)
+             )) + 
+  labs(x = "Sample Size", y = "Matthew's Correlation Coefficient (MCC)", fill = "", 
+       color = "")  + 
+  theme_bw()+ 
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 20),
+        plot.title = element_text(size = 22),
+        strip.text.x = element_text(size = 20),
+        strip.text.y = element_text(size = 20)) 
+
+
+
+########## STABLE RESULTS
+
+#Specificity NS
+Spec_NS_stable <- NSsim3_df %>% filter(!(method == "lvar" & TrueEdgeDist > 1)) %>%
+  group_by(p, n, sparsity, method)%>% 
+  summarize(mu = mean(1-FPR.TN), scale = MCSE(1-FPR.TN, nsim = 2000)) %>% 
+  ggplot(aes(x = as.factor(n), y = mu, color = method, fill = method)) + 
+  geom_bar(stat = "identity", position = position_dodge(1)) + 
+  geom_errorbar(aes(ymax = mu + scale, ymin = mu - scale), 
+                position = position_dodge(1), color = "black", 
+                width = 0.5)+
+  scale_color_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  scale_fill_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  facet_grid(p ~ sparsity, 
+             labeller = labeller( p = as_labeller(p.labs), 
+                                  sparsity = as_labeller(sparsity.labs)
+             )) + 
+  labs(x = "Sample Size", y = "Specificity", fill = "", 
+       color = "", title = "") + 
+  theme_bw()+ 
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 20),
+        plot.title = element_text(size = 22),
+        strip.text.x = element_text(size = 20),
+        strip.text.y = element_text(size = 20))
+
+#Sensitivity NS
+TPR_NS_stable <- NSsim3_df %>% filter(!(method == "lvar" & TrueEdgeDist > 1)) %>%
+  group_by(p, n, sparsity, method)%>% 
+  summarize(mu = mean(Sens.TP), scale = MCSE(Sens.TP, nsim = 2000)) %>% 
+  ggplot(aes(x = as.factor(n), y = mu, color = method, fill = method)) + 
+  geom_bar(stat = "identity", position = position_dodge(1)) + 
+  geom_errorbar(aes(ymax = mu + scale, ymin = mu - scale), 
+                position = position_dodge(1), color = "black", 
+                width = 0.5)+
+  scale_color_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  scale_fill_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  facet_grid(p ~ sparsity, 
+             labeller = labeller( p = as_labeller(p.labs), 
+                                  sparsity = as_labeller(sparsity.labs)
+             )) + 
+  labs(x = "Sample Size", y = "Sensitivity", fill = "", 
+       color = "") + 
+  theme_bw()+ 
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 20),
+        plot.title = element_text(size = 22),
+        strip.text.x = element_text(size = 20),
+        strip.text.y = element_text(size = 20)) 
+
+#MAE NS
+MAE_NS_stable <- NSsim3_df %>% filter(!(method == "lvar" & TrueEdgeDist > 1)) %>%
+  group_by(p, n, sparsity, method)%>% 
+  summarize(mu = mean(TrueEdgeDist), scale = MCSE(TrueEdgeDist, nsim = 2000)) %>% 
+  ggplot(aes(x = as.factor(n), y = mu, color = method, fill = method)) + 
+  geom_bar(stat = "identity", position = position_dodge(1)) + 
+  geom_errorbar(aes(ymax = mu + scale, ymin = mu - scale), 
+                position = position_dodge(1), color = "black", 
+                width = 0.5)+
+  scale_color_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  scale_fill_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  facet_grid(p ~ sparsity, 
+             labeller = labeller( p = as_labeller(p.labs), 
+                                  sparsity = as_labeller(sparsity.labs)
+             )) + 
+  labs(x = "Sample Size", y = "Edge Distance (MAE)", fill = "", 
+       color = "") + 
+  theme_bw()+ 
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 20),
+        plot.title = element_text(size = 22),
+        strip.text.x = element_text(size = 20),
+        strip.text.y = element_text(size = 20))
+
+
+#Matthews correlation NS
+MCC_NS_stable <- NSsim3_df %>% filter(!(method == "lvar" & TrueEdgeDist > 1)) %>%
+  group_by(p, n, sparsity, method)%>% 
+  summarize(mu = mean(MCC(TP = TP, TN = TN, FP = FP, FN = FN),na.rm = T), scale = MCSE(MCC(TP = TP, TN = TN, FP = FP, FN = FN), nsim = 2000)) %>% 
+  ggplot(aes(x = as.factor(n), y = mu, color = method, fill = method)) + 
+  geom_bar(stat = "identity", position = position_dodge(1)) + 
+  geom_errorbar(aes(ymax = mu + scale, ymin = mu - scale), 
+                position = position_dodge(1), color = "black", 
+                width = 0.5)+
+  scale_color_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  scale_fill_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  facet_grid(p ~ sparsity, 
+             labeller = labeller( p = as_labeller(p.labs), 
+                                  sparsity = as_labeller(sparsity.labs)
+             )) + 
+  labs(x = "Sample Size", y = "Matthew's Correlation Coefficient (MCC)", fill = "", 
+       color = "")  + 
+  theme_bw()+ 
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 20),
+        plot.title = element_text(size = 22),
+        strip.text.x = element_text(size = 20),
+        strip.text.y = element_text(size = 20)) 
+
+#Specificity S
+Spec_S_stable <- Ssim3_df %>% filter(!(method == "lvar" & TrueEdgeDist > 1)) %>%
+  group_by(p, n, sparsity, method)%>% 
+  summarize(mu = mean(1-FPR.TN), scale = MCSE(1-FPR.TN, nsim = 2000)) %>% 
+  ggplot(aes(x = as.factor(n), y = mu, color = method, fill = method)) + 
+  geom_bar(stat = "identity", position = position_dodge(1)) + 
+  geom_errorbar(aes(ymax = mu + scale, ymin = mu - scale), 
+                position = position_dodge(1), color = "black", 
+                width = 0.5)+
+  scale_color_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  scale_fill_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  facet_grid(p ~ sparsity, 
+             labeller = labeller( p = as_labeller(p.labs), 
+                                  sparsity = as_labeller(sparsity.labs)
+             )) + 
+  labs(x = "Sample Size", y = "Specificity", fill = "", 
+       color = "", title = "") + 
+  theme_bw()+ 
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 20),
+        plot.title = element_text(size = 22),
+        strip.text.x = element_text(size = 20),
+        strip.text.y = element_text(size = 20))
+
+#Sensitivity S
+TPR_S_stable <- Ssim3_df %>% filter(!(method == "lvar" & TrueEdgeDist > 1)) %>%
+  group_by(p, n, sparsity, method)%>% 
+  summarize(mu = mean(Sens.TP), scale = MCSE(Sens.TP, nsim = 2000)) %>% 
+  ggplot(aes(x = as.factor(n), y = mu, color = method, fill = method)) + 
+  geom_bar(stat = "identity", position = position_dodge(1)) + 
+  geom_errorbar(aes(ymax = mu + scale, ymin = mu - scale), 
+                position = position_dodge(1), color = "black", 
+                width = 0.5)+
+  scale_color_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  scale_fill_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  facet_grid(p ~ sparsity, 
+             labeller = labeller( p = as_labeller(p.labs), 
+                                  sparsity = as_labeller(sparsity.labs)
+             )) + 
+  labs(x = "Sample Size", y = "Sensitivity", fill = "", 
+       color = "") + 
+  theme_bw()+ 
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 20),
+        plot.title = element_text(size = 22),
+        strip.text.x = element_text(size = 20),
+        strip.text.y = element_text(size = 20)) 
+
+#MAE S
+MAE_S_stable <- Ssim3_df %>% filter(!(method == "lvar" & TrueEdgeDist > 1)) %>%
+  group_by(p, n, sparsity, method)%>% 
+  summarize(mu = mean(TrueEdgeDist), scale = MCSE(TrueEdgeDist, nsim = 2000)) %>% 
+  ggplot(aes(x = as.factor(n), y = mu, color = method, fill = method)) + 
+  geom_bar(stat = "identity", position = position_dodge(1)) + 
+  geom_errorbar(aes(ymax = mu + scale, ymin = mu - scale), 
+                position = position_dodge(1), color = "black", 
+                width = 0.5)+
+  scale_color_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  scale_fill_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  facet_grid(p ~ sparsity, 
+             labeller = labeller( p = as_labeller(p.labs), 
+                                  sparsity = as_labeller(sparsity.labs)
+             )) + 
+  labs(x = "Sample Size", y = "Edge Distance (MAE)", fill = "", 
+       color = "") + 
+  theme_bw()+ 
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 20),
+        plot.title = element_text(size = 22),
+        strip.text.x = element_text(size = 20),
+        strip.text.y = element_text(size = 20))
+
+
+#Matthews correlation S
+MCC_S_stable <- Ssim3_df %>% filter(!(method == "lvar" & TrueEdgeDist > 1)) %>%
+  group_by(p, n, sparsity, method)%>% 
+  summarize(mu = mean(MCC(TP = TP, TN = TN, FP = FP, FN = FN),na.rm = T), scale = MCSE(MCC(TP = TP, TN = TN, FP = FP, FN = FN), nsim = 2000)) %>% 
+  ggplot(aes(x = as.factor(n), y = mu, color = method, fill = method)) + 
+  geom_bar(stat = "identity", position = position_dodge(1)) + 
+  geom_errorbar(aes(ymax = mu + scale, ymin = mu - scale), 
+                position = position_dodge(1), color = "black", 
+                width = 0.5)+
+  scale_color_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  scale_fill_manual(values= c("#088096", "#426737","#898928", "#CB7223"),
+                     labels= c("L1 GLM","L1-SEM","Panel VAR","SEM"))+
+  facet_grid(p ~ sparsity, 
+             labeller = labeller( p = as_labeller(p.labs), 
+                                  sparsity = as_labeller(sparsity.labs)
+             )) + 
+  labs(x = "Sample Size", y = "Matthew's Correlation Coefficient (MCC)", fill = "", 
+       color = "")  + 
+  theme_bw()+ 
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 20),
+        plot.title = element_text(size = 22),
+        strip.text.x = element_text(size = 20),
+        strip.text.y = element_text(size = 20)) 
+
+ggsave("./Final figures/Stable Stationary MAE", plot = MAE_S_stable, width = 8, height = 6, dpi = 300)
+
+```
+
+```{r}
+# panel var convergence failure proportions
+
+ns_prop <- NSsim3_df %>% group_by(p,n,sparsity) %>% select(method, p, n, sparsity, TrueEdgeDist) %>% filter(method == "lvar" & TrueEdgeDist > 1.0) %>% summarise("Number Excluded" = sum(TrueEdgeDist > 1.0)) 
+
+s_prop <- Ssim3_df %>% group_by(p,n,sparsity) %>% select(method, p, n, sparsity, TrueEdgeDist) %>% filter(method == "lvar" & TrueEdgeDist > 1.0) %>% summarise("Number Excluded" = sum(TrueEdgeDist > 1.0))
+
+Ssim2_df %>% group_by(p,n,sparsity, model) %>% select(method, p, n, sparsity, model, TrueEdgeDist) %>% filter(method == "lvar" & TrueEdgeDist > 1.0) %>% summarise("Proportion Excluded" = sum(TrueEdgeDist > 1.0) / 2000)
+
+```
