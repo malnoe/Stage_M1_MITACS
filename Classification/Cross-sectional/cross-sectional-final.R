@@ -34,7 +34,7 @@ adjusted_fit <- function(df,adversity,outcome,main="Adjusted and unadjusted line
   # Unadjusted linear model
   lm_unadjusted <- lm(as.formula(paste(outcome, "~", adversity)), data = df)
   
-  # Identification of influencial points using Cook's D.
+  # Identification of influencial points using Cook's D with 4/n threshold
   used_data <- model.frame(lm_unadjusted)
   influencial_points <- which(cooks.distance(lm_unadjusted) > 4 / nrow(used_data))
   used_rows <- as.numeric(rownames(used_data))
@@ -51,10 +51,10 @@ adjusted_fit <- function(df,adversity,outcome,main="Adjusted and unadjusted line
   residuals_all <- df[[outcome]] - predicted_all
   
   # Bayesian glm for credibility intervals
-  lm_adjusted_cred <- stan_glm(as.formula(paste(outcome, "~", adversity)), data = df,refresh=0)
+  lm_adjusted_cred <- stan_glm(as.formula(paste(outcome, "~", adversity)), 
+                               data = df,refresh=0)
   
-  # Plot
-  # Influencer binary value to plot
+  # Dataframe for plotting
   influencer_flags <- rep(FALSE, nrow(df))
   influencer_flags[original_indices] <- TRUE
   
@@ -62,7 +62,7 @@ adjusted_fit <- function(df,adversity,outcome,main="Adjusted and unadjusted line
     mutate(influencer = influencer_flags)
   
   
-  # Lines
+  # Dataframe for plotting
   lines_df <- data.frame(
     intercept = c(coef(lm_unadjusted)[1],
                   coef(lm_adjusted)[1]),
@@ -73,27 +73,18 @@ adjusted_fit <- function(df,adversity,outcome,main="Adjusted and unadjusted line
   )
   
   
-  # ggplot
+  # Plot
   plot <- ggplot(df_plot, aes_string(x = adversity, y = outcome)) +
-    
-    # Influencers
     geom_point(aes(shape = influencer), size = 3) +
-    
-    # Regression lines
     geom_abline(data = lines_df,
                 aes(intercept = intercept, slope = slope, color = model),
                 size = 1)+
-    
-    # Legend
     scale_color_manual(values = c("Unadjusted" = "deepskyblue4",
                                   "Adjusted" = "aquamarine2"),
                        name="Model") +
-    
     scale_shape_manual(values = c(`FALSE` = 1, `TRUE` = 16),
                        labels = c("Normal", "Influencer"),
                        name = "Point type") +
-    
-    # Title, xlab, ylab, theme
     labs(
       x = xlab,
       y = ylab,
@@ -103,14 +94,13 @@ adjusted_fit <- function(df,adversity,outcome,main="Adjusted and unadjusted line
     theme(
       plot.title = element_text(size = 18)
     )
-  
-  # Resilient/Vulnerable anotations
   if(lines_df$slope[[1]] < 0){
     plot <-plot + geom_text(x=max(na.omit(df[[adversity]]))-5,y=max(na.omit(df[[outcome]]))-5,label="Resilient",alpha=0.2,color="grey",size=7) + geom_text(x=min(na.omit(df[[adversity]]))+5,y=min(na.omit(df[[outcome]]))+5,label="Non-resilient",alpha=0.2,color="grey",size=7)
   }
   else{
     plot <- plot + geom_text(x=min(na.omit(df[[adversity]]))+5,y=max(na.omit(df[[outcome]]))-5,label="Non-resilient",alpha=0.2,color="grey",size=7) + geom_text(x=max(na.omit(df[[adversity]]))-5,y=min(na.omit(df[[outcome]]))+5,label="Resilient",alpha=0.2,color="grey",size=7)
   }
+  
   
   return(list(plot=plot,
               influencers_indices=original_indices,
@@ -121,18 +111,22 @@ adjusted_fit <- function(df,adversity,outcome,main="Adjusted and unadjusted line
 
 
 ## Functions - Naive approach functions ####
-# Functions to get the groups from the raw residuals
+# Functions to get the groups the naive way 
+# if residual = 0 -> average,
+# else vulnerable or resilient depending on the sign
 get_groups_raw_residuals <- function(residuals,is_resilience_positive=FALSE){
   res_list <- list()
   for(i in 1:length(residuals)){
     
     # Result depends of the slope sign
+    # Case residual > 0 -> resilient
     if(is_resilience_positive){
       res_list[i] <- if(is.na(residuals[i])){NA}
       else if(residuals[i]>0){"resilient"}
       else if(residuals[i]==0){"average"}
       else{"non_resilient"}
     }
+    # Case residual <0 -> resilient
     else{
       res_list[i] <- if(is.na(residuals[i])){NA}
       else if(residuals[i]<0){"resilient"}
@@ -143,9 +137,8 @@ get_groups_raw_residuals <- function(residuals,is_resilience_positive=FALSE){
   return(res_list)
 }
 
-# Visualization function for raw residuals
+# Visualization function for the naive approach
 visualization_raw_residuals <- function(df, adversity, outcome, adjusted_lm, groups, main = "Groups using naive method",xlab="",ylab="") {
-  
   # Adjusted linear regression coefficient for the plot
   intercept <- coef(adjusted_lm)[1]
   slope     <- coef(adjusted_lm)[2]
@@ -153,7 +146,7 @@ visualization_raw_residuals <- function(df, adversity, outcome, adjusted_lm, gro
   # Add groups to the temporary df to color the points
   df$group <- factor(groups, levels = c("resilient", "average", "non_resilient"))
   
-  # Viz
+  # Plot
   plot <- ggplot(df, aes(x = .data[[adversity]], y = .data[[outcome]], color = group)) +
     geom_point(shape=16,size=1.5) +
     geom_abline(intercept = intercept, slope = slope, color = "grey", linetype = "solid") +
@@ -180,6 +173,8 @@ visualization_raw_residuals <- function(df, adversity, outcome, adjusted_lm, gro
 
 
 ## Functions - Confidence / Prediction / Credibility intervals approach  ####
+
+# Function to obtain a credibility interval associated to a bayesian linear model
 get_credibility_intervals <- function(lm_adjusted_cred,newdata,adversity_string,lwr=0.025,upr=0.975){
   
   # Posterior linear prediction
@@ -193,10 +188,10 @@ get_credibility_intervals <- function(lm_adjusted_cred,newdata,adversity_string,
     preds <- matrix(preds, nrow = 1000)
   }
   
-  # Compute credible intervals per observation (apply over columns)
+  # Compute credible intervals per observation
   intervals <- t(apply(preds, 2, quantile, probs = c(lwr, upr)))
   
-  # Formating the result
+  # Initializing the result
   res <- data.frame(lwr=c(), upr=c())
   counter <- 1
   
@@ -216,7 +211,7 @@ get_credibility_intervals <- function(lm_adjusted_cred,newdata,adversity_string,
 }
 
 
-# Function to return groups based on confidence/prediction/credibility intervals
+# Function to obtain groups based on confidence or prediction or credibility intervals
 get_groups_intervals <- function(actual, pred, is_resilience_positive = FALSE) {
   # Initialization of the result vector
   groups <- rep(NA_character_, length(actual))
@@ -224,12 +219,15 @@ get_groups_intervals <- function(actual, pred, is_resilience_positive = FALSE) {
   # Valid lines
   valid <- !is.na(actual) & !is.na(pred$lwr) & !is.na(pred$upr)
   
-  # Classification with respect to the sign
+  # Classification with respect to the sign of the relation
+  # Case 1 : residual above the top of the interval -> resilient
   if (is_resilience_positive) {
     groups[valid & actual < pred$lwr] <- "non_resilient"
     groups[valid & actual > pred$upr] <- "resilient"
     groups[valid & actual >= pred$lwr & actual <= pred$upr] <- "average"
-  } else {
+  } 
+  # Case 2 : residual below the bottom of the interval -> resilient
+  else {
     groups[valid & actual < pred$lwr] <- "resilient"
     groups[valid & actual > pred$upr] <- "non_resilient"
     groups[valid & actual >= pred$lwr & actual <= pred$upr] <- "average"
@@ -238,6 +236,7 @@ get_groups_intervals <- function(actual, pred, is_resilience_positive = FALSE) {
   return(groups)
 }
 
+# Function for the visualization of multiple intervals on a linear model
 visualization_intervals <- function(df, adversity, outcome, adjusted_lm, preds, labels, 
                                     main = "Intervals", 
                                     colors = c("#deebf7", "#9ecae1","skyblue", "#6baed6", "#3182bd", "#08519c"),xlab="",ylab="") {
@@ -305,22 +304,34 @@ visualization_intervals <- function(df, adversity, outcome, adjusted_lm, preds, 
 } 
 
 ## Functions - Quantile approach ####
+# Function 
 classification_quantiles <- function(data_training, new_data, quantile_sub, quantile_sup, model, outcome_string, adversity_string) {
+  # Obtain the residuals of the not overly influential individuals (ie. data in data_training)
   residuals <- data_training[[outcome_string]] - (model$coefficients[[1]] + data_training[[adversity_string]] * model$coefficients[[2]])
   
+  # Obtain the corresponding quantiles
   res_sub <- quantile(residuals, quantile_sub, na.rm = TRUE)
   res_sup <- quantile(residuals, quantile_sup, na.rm = TRUE)
+  
+  # Obtain the residuals of the new data to group (ie. data in new_data)
   residuals_new <- new_data[[outcome_string]] - (model$coefficients[[1]] + new_data[[adversity_string]] * model$coefficients[[2]])
+  
+  # Sign of the relationship
   is_resilience_positive <- model$coefficients[[2]] < 0
   
+  # Initialize the result
   res <- rep(NA, length(residuals_new))
   valid <- !is.na(residuals_new)
   res[valid] <- "average"
   
+  # Grouping depending on the sign of the relationship
+  # Case 1 : top residual -> resilient
   if (is_resilience_positive) {
     res[valid & residuals_new <= res_sub] <- "non_resilient"
     res[valid & residuals_new >= res_sup] <- "resilient"
-  } else {
+  } 
+  # Case 2 : bottom residual -> resilient
+  else {
     res[valid & residuals_new <= res_sub] <- "resilient"
     res[valid & residuals_new >= res_sup] <- "non_resilient"
   }
@@ -330,16 +341,23 @@ classification_quantiles <- function(data_training, new_data, quantile_sub, quan
 
 
 ## Functions - SD-based approach ####
+
+# Function to obtain the standard deviation in each bin of the adversity variable
 get_sd_in_bins <- function(data_training, lm, bins,multiplicator,outcome_string, adversity_string){
+  # Residuals of the not overly influential individuals (ie. data in data_training)
   residuals <- data_training[[outcome_string]] - (lm$coefficients[[1]] + data_training[[adversity_string]] * lm$coefficients[[2]])
+  
+  # Initialize the result
   res_SD <- list()
   
   # Calculate the SD for each bin
   for (i in 1:(length(bins) - 1)) {
+    # Individuals in the bin we're working on and their residuals
     in_bin <- data_training[[adversity_string]] >= bins[i] & data_training[[adversity_string]] < bins[i + 1]
-    
     residuals_bin <- residuals[in_bin]
-    if(length(residuals_bin)>0){
+    
+    # Compute the SD if there are enough individuals in the bin
+    if(length(residuals_bin)>1){
       res_SD[i] <- sd(residuals_bin, na.rm = TRUE)*multiplicator
     }
     else{
@@ -465,8 +483,10 @@ visualization_sd_intervals <- function(df,adversity,outcome,adjusted_lm,bins,res
 }
 
 ## Functions - K-means approach ####
+
+# Function to obtain the centers of a 3 clusters obtained with the k-means algorithm
 res_kmeans <- function(data_training,lm,outcome_string,adversity_string){
-  #Get the residuals of all individuals
+  #Get the residuals of the not overly influential individuals (ie. data_training)
   residuals <- data_training[[outcome_string]] - (lm$coefficients[[1]] + data_training[[adversity_string]] * lm$coefficients[[2]])
   
   # Create dataframe for clustering
@@ -484,10 +504,14 @@ res_kmeans <- function(data_training,lm,outcome_string,adversity_string){
   # Identify cluster corresponding to min, average, and max
   ordered_clusters <- names(sort(cluster_means))
   average_group <- ordered_clusters[2]
+  
+  # Depends of the sign of the relationship
+  # Case 1 : high residuals -> resilient
   if(lm$coefficients[[2]]<0){
     resilient_group <- ordered_clusters[3]
     non_resilient_group <- ordered_clusters[1]
   }
+  # Case 2 : low residuals -> resilient
   else{
     resilient_group <- ordered_clusters[1]
     non_resilient_group <- ordered_clusters[3]
@@ -497,11 +521,12 @@ res_kmeans <- function(data_training,lm,outcome_string,adversity_string){
   
 }
 
+# Function to obtain the groupings of some data (new_data) with the result of a clusturing (res_kmeans)
 classification_kmeans <- function(new_data, res_kmeans, model, outcome_string, adversity_string) {
   # Residuals of new data
   residuals <- new_data[[outcome_string]] - (model$coefficients[[1]] + new_data[[adversity_string]] * model$coefficients[[2]])
   
-  # centers
+  # Get the center with the result of the res_kmeans
   centers <- c(
     non_resilient = res_kmeans$non_resilient_center,
     average = res_kmeans$average_center,
@@ -514,7 +539,8 @@ classification_kmeans <- function(new_data, res_kmeans, model, outcome_string, a
   # Valid data
   valid <- !is.na(residuals)
   
-  # Pour chaque individu, on cherche le centre le plus proche
+  # For each individual, we search for the closest center and affect the 
+  # individual to that cluster.
   dists <- sapply(centers, function(center) abs(residuals[valid] - center))
   closest <- apply(dists, 1, function(row) names(centers)[which.min(row)])
   
@@ -523,6 +549,7 @@ classification_kmeans <- function(new_data, res_kmeans, model, outcome_string, a
   return(classification)
 }
 
+# Function to visualize the result of the k-means grouping
 visualization_groups <- function(df,adversity,outcome,adjusted_lm,groups,main="Clusturing results",xlab="",ylab=""){
   # Adjusted linear regression coefficient for the plot
   intercept <- coef(adjusted_lm)[1]
@@ -577,7 +604,9 @@ visualization_groups <- function(df,adversity,outcome,adjusted_lm,groups,main="C
 }
 ## Functions - Get all groups ####
 
-# Function to get a dataframe with all of the grouping methods result and the dataframe with the sizes of each group for each method
+# Function that regroups all of the grouping methods.
+# The result is a dataframe with the grouping (resilient, average, non-resilient) for all the individuals
+# and a dataframe containing the size of each group for each grouping method.
 get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualization=TRUE,xlab="Adversity",ylab="Outcome"){
   
   # Get the info about the lm
@@ -586,32 +615,16 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
   resilience_sign <- lm_adjusted$coefficients[2]<0
   data_training <- res$lm_adjusted$model
   
-  # Initialize the result data_frames : one with the grouping for each person and each method and one with the number of people in each group for each method
+  # Get the residuals of the new data
   outcome <- df[[outcome_string]]
   adversity <- df[[adversity_string]]
   residuals_new_data <- outcome - (lm_adjusted$coefficients[[1]] + adversity * lm_adjusted$coefficients[[2]])
   
+  # Initialize the result data_frames
   df_n_groups <- data.frame(resilient=c(),average=c(),non_resilient=c())
   df_result <- data.frame(residuals=residuals_new_data,adversity=adversity)
   
-  # Standard deviation
-  list_sd_multiplicator <- list(2,1,0.5)
-  names_sd <- list("2SD","1SD","0.5SD")
-  res_sd <- list()
-  
-  for(i in 1:length(list_sd_multiplicator)){
-    res_sd_i <- get_sd_in_bins(data_training,lm_adjusted,bins,list_sd_multiplicator[[i]],outcome_string,adversity_string)
-    res_sd[[i]] <- res_sd_i
-    groups <- classification_sd(df,bins,res_sd_i,lm_adjusted,outcome_string=outcome_string,adversity_string=adversity_string,list_sd_multiplicator[[i]])
-    df_n_groups <- rbind(df_n_groups,
-                         data.frame(resilient = sum(groups=="resilient", na.rm=TRUE), average = sum(groups=="average", na.rm=TRUE), non_resilient = sum(groups=="non_resilient", na.rm=TRUE), row.names=c(names_sd[[i]])))
-    df_result[[names_sd[[i]]]] <- groups
-  }
-  if(visualization){
-    print(visualization_sd_intervals(df,adversity=adversity_string,outcome=outcome_string,adjusted_lm=lm_adjusted,bins=bins,res=res_sd,names_sd=names_sd,main="SD Intervals",xlab=xlab,ylab=ylab))
-  }
-  
-  # Raw residuals
+  # Naive approach
   groups_raw <- get_groups_raw_residuals(residuals_new_data,is_resilience_positive=resilience_sign)
   df_n_groups <- rbind(df_n_groups,data.frame(resilient = sum(groups_raw=="resilient", na.rm=TRUE), average = sum(groups_raw=="average", na.rm=TRUE), non_resilient = sum(groups_raw=="non_resilient", na.rm=TRUE), row.names=c("raw")))
   df_result[["raw"]] <- groups_raw
@@ -727,7 +740,24 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
     df_result[[names_quant[[i]]]] <- groups
   }
   
-  # Kmeans (only residuals)
+  # Standard deviation
+  list_sd_multiplicator <- list(2,1,0.5)
+  names_sd <- list("2SD","1SD","0.5SD")
+  res_sd <- list()
+  
+  for(i in 1:length(list_sd_multiplicator)){
+    res_sd_i <- get_sd_in_bins(data_training,lm_adjusted,bins,list_sd_multiplicator[[i]],outcome_string,adversity_string)
+    res_sd[[i]] <- res_sd_i
+    groups <- classification_sd(df,bins,res_sd_i,lm_adjusted,outcome_string=outcome_string,adversity_string=adversity_string,list_sd_multiplicator[[i]])
+    df_n_groups <- rbind(df_n_groups,
+                         data.frame(resilient = sum(groups=="resilient", na.rm=TRUE), average = sum(groups=="average", na.rm=TRUE), non_resilient = sum(groups=="non_resilient", na.rm=TRUE), row.names=c(names_sd[[i]])))
+    df_result[[names_sd[[i]]]] <- groups
+  }
+  if(visualization){
+    print(visualization_sd_intervals(df,adversity=adversity_string,outcome=outcome_string,adjusted_lm=lm_adjusted,bins=bins,res=res_sd,names_sd=names_sd,main="SD Intervals",xlab=xlab,ylab=ylab))
+  }
+  
+  # Kmeans
   res_kmeans <- res_kmeans(data_training,lm_adjusted,outcome_string,adversity_string)
   groups_kmeans <- classification_kmeans(df, res_kmeans, lm_adjusted, outcome_string, adversity_string)
   df_n_groups <- rbind(df_n_groups,
@@ -742,6 +772,8 @@ get_all_groups <- function(df,adversity_string,outcome_string,bins,res,visualiza
 
 
 ## Functions - Classification functions ####
+
+# Function to get the metrics for a classification using the true labels and comparing them to the predicted labels
 classification_metrics <- function(true_labels, predicted_labels,levels=c("resilient", "average", "non_resilient")) {
   # Convert to factors with same levels
   true_labels <- factor(true_labels, levels = levels)
@@ -771,6 +803,7 @@ classification_metrics <- function(true_labels, predicted_labels,levels=c("resil
   fps <- numeric(n_classes)
   supports <- numeric(n_classes)
   
+  # Class specific metrics
   for (i in 1:n_classes) {
     class <- levels[i]
     
@@ -811,41 +844,46 @@ classification_metrics <- function(true_labels, predicted_labels,levels=c("resil
   return(results)
 }
 
+# Function returning the predictors with low enough VIF
 remove_high_vif <- function(df, predictors, threshold = 5) {
-  # Garder seulement les variables non constantes
+  # Only keep the non-constent predictors
   non_constant <- predictors[sapply(df[, predictors, drop = FALSE], function(x) length(unique(x)) > 1)]
   
-  # Retirer les variables avec trop peu de niveaux uniques (ex : 1 ou 2 niveaux sur une variable censée être continue)
+  # Get rid of predictirs with 1 or 2 values only
   non_low_variance <- non_constant[sapply(df[, non_constant, drop = FALSE], function(x) length(unique(x)) > 3)]
   
+  # Verify with there are enough predictors left to compute the VIF
   if (length(non_low_variance) < 2) {
     warning("Pas assez de variables valides pour calculer le VIF.")
     return(non_low_variance)
   }
   
+  # Get the VIF
   df$fake_outcome <- 1
   f <- as.formula(paste("fake_outcome ~", paste(non_low_variance, collapse = " + ")))
   lm_fit <- lm(f, data = df)
   vif_values <- car::vif(lm_fit)
-  print("aa")
-  print(vif_values)
-  print("bbb")
   
+  # Result only VIF < threshold 
   kept_predictors <- names(vif_values)[vif_values < threshold]
   return(kept_predictors)
 }
 
-
+# Function to evaluate the classification performance of random forest classifiers
+# based on the training data obtained with the different grouping methods
 estimation_classification_cv <- function(df, adversity_string, outcome_string, bins, list_group_names, predictors, k = 5, seed = 123){
+  # Initialization
   set.seed(seed)
   res <- data.frame()
   
   # Get the groupings once, from the full dataset
   res_data_train <- adjusted_fit(df, adversity_string, outcome_string)
   df_result <- get_all_groups(df, adversity_string, outcome_string, bins, res_data_train, visualization = FALSE)$df_result
+  
   # Remove high VIF predictors
   predictors <- remove_high_vif(df, predictors, threshold = 5)
   
+  # For each grouping method
   for(i in 1:length(list_group_names)){
     group_name <- list_group_names[[i]]
     print(paste("Running CV for group:", group_name))
@@ -854,9 +892,11 @@ estimation_classification_cv <- function(df, adversity_string, outcome_string, b
     
     # Create folds (stratified)
     folds <- createFolds(df$groups, k = k, list = TRUE, returnTrain = FALSE)
+    
     # Initialize metrics accumulators
     all_metrics <- list()
     
+    # For each fold
     for (fold_idx in seq_along(folds)) {
       test_indices <- folds[[fold_idx]]
       train_data <- df[-test_indices, ]
@@ -913,6 +953,7 @@ estimation_classification_cv <- function(df, adversity_string, outcome_string, b
 }
 
 ## Functions - Visualization of classification results functions ####
+# Function to visualize and compare the average accuracy and the null model accuracy
 comparison_accuracy_null_model_classifier <- function(df_perf){
   df_long <- df_perf %>%
     pivot_longer(cols = c(accuracy, null_model),
@@ -939,6 +980,7 @@ comparison_accuracy_null_model_classifier <- function(df_perf){
   return(plot)
 }
 
+# Function to visualize the average precision and recall for the resilient group of the different models
 visualization_recall_precision <- function(df_perf,list_groups){
   df_perf_class_comparison <- df_perf %>% filter(group_name %in% list_groups)
   ggplot(df_perf_class_comparison,aes(x=1-recall_resilient,y=precision_resilient,label=group_name))+
@@ -958,7 +1000,6 @@ visualization_recall_precision <- function(df_perf,list_groups){
 df_LORA <- readRDS("C:/Users/garan/Documents/Ecole/M1/Stage/Internship_repo/Classification/Cross-sectional/ds_forJan.rds")
 
 # List all the interesting items/variables
-
 # predictive
 bfi <- paste0("bfi_",1:10)
 cdrisk <- paste0("cdrisk_",1:25)
@@ -978,13 +1019,15 @@ pss <- paste0("pss_",1:10)
 dh <- paste0("dh_",c(1:28,44:58))
 ghq <- paste0("ghq_", 1:28)
 
+# List of variables
 variables <- c("id","age","income","employment_status","gender",bfi,cdrisk,cerq,cope,ctq,fsozu,gpass,pas_content,gse,ielc,le,lotr,pss,dh,ghq)
 
-# Select variables and t=1
+# Select variables and fix t=1
 df_LORA$id <- as.character(df_LORA$id)
 df_LORA$study <- as.character(df_LORA$study)
 df_LORA <- df_LORA[df_LORA$t==1&!is.na(df_LORA$study)&!is.na(df_LORA$id),variables]
 df_LORA <- df_LORA[1:1191,]
+
 # Format the dataframe
 df_LORA <- as.data.frame(lapply(df_LORA, function(x) as.numeric(as.character(x))))
 
@@ -1139,15 +1182,14 @@ LORA_pss_sum.r <- LORA_pss_sum.mf$ximp
 LORA_dh_sum.mf <- missForest::missForest(xmis = LORAdh_sum)
 LORA_dh_sum.r <- LORA_dh_sum.mf$ximp
 
+# List of methods to test
 groups_to_test <- list("quantiles (5%)","quantiles (10%)","quantiles (15%)","quantiles (20%)","quantiles (25%)","quantiles (30%)","quantiles (35%)",
                        "pred. residuals (75%)","pred. residuals (60%)","pred. residuals (50%)","conf. residuals (99%)","conf. residuals (95%)",
                        "cred. 99.9%","cred. 99%","cred. 95%","cred. 90%","cred. 75%","cred. 50%","Kmeans")
 
-# LORA - PSS 
 # Classification test with PSS
 # Reproductibility
 set.seed(42)
-
 # Evaluation performance
 df_perf_cv_pss <- estimation_classification_cv(
   df = LORA_pss_sum.r,
@@ -1158,12 +1200,10 @@ df_perf_cv_pss <- estimation_classification_cv(
   predictors = explication_vars_LORA,
   k = 10
 )
-
 # Visualization of the result
 comparison_accuracy_null_model_classifier(df_perf_cv_pss)
 visualization_recall_precision(df_perf_cv_pss)
 
-# LORA - DH
 #Classification test with DH
 # Reproductibility
 df_perf_cv_dh <- estimation_classification_cv(
@@ -1175,7 +1215,6 @@ df_perf_cv_dh <- estimation_classification_cv(
   predictors = explication_vars_LORA,
   k = 10
 )
-
 #Visualization
 comparison_accuracy_null_model_classifier(df_perf_cv_dh)
 visualization_recall_precision(df_perf_cv_dh,groups_to_test)
@@ -1186,10 +1225,7 @@ visualization_recall_precision(df_perf_cv_dh,groups_to_test)
 explication_vars_items <- c("age","income","employment_status","gender",bfi,cdrisk,cerq,cope,ctq,fsozu,gpass,pas_content,gse,ielc,le,lotr)
 adversity_vars_LORA <- c("dh_sum","pss_sum")
 outcome_var_LORA <- c("ghq_sum")
-
 df_LORA_final <- df_LORA[,c(explication_vars_items,adversity_vars_LORA,outcome_var_LORA)]
-
-# Miss forest
 LORAdh_items <- df_LORA_final[!is.na(df_LORA_final$dh_sum) & !is.na(df_LORA_final$ghq_sum)&!is.na(df_LORA_final$age)&!is.na(df_LORA_final$gender),]
 LORApss_items <- df_LORA_final[!is.na(df_LORA_final$pss_sum) & !is.na(df_LORA_final$ghq_sum)&!is.na(df_LORA_final$age)&!is.na(df_LORA_final$gender),]
 
@@ -1198,28 +1234,24 @@ indices <- which(rowMeans(is.na(LORAdh_items)) > 0.3)
 LORAdh_items <- LORAdh_items[-indices,]
 dim(LORAdh_items)
 
-indices <- which(rowMeans(is.na(LORApss_items)) > 0.3)
-LORApss_items <- LORApss_items[-indices,]
-dim(LORApss_items)
-
+# Miss forest
 LORA_pss_items.mf <- missForest::missForest(xmis = LORApss_items)
 LORA_pss_items.r <- LORA_pss_items.mf$ximp
 LORA_dh_items.mf <- missForest::missForest(xmis = LORAdh_items)
 LORA_dh_items.r <- LORA_dh_items.mf$ximp
 
+# List of methods to test
 groups_to_test <- list("quantiles (5%)","quantiles (10%)","quantiles (15%)","quantiles (20%)","quantiles (25%)","quantiles (30%)","quantiles (35%)",
                        "pred. residuals (75%)","pred. residuals (60%)","pred. residuals (50%)","conf. residuals (99%)","conf. residuals (95%)",
                        "cred. 99.9%","cred. 99%","cred. 95%","cred. 90%","cred. 75%","cred. 50%",
                        "2SD","1SD","0.5SD","Kmeans")
 
-# LORA - PSS 
+# Classification test with PSS
 df <- LORA_pss_items.r
 adversity_string <- "pss_sum"
 outcome_string <- "ghq_sum"
 outcome <- df$ghq_sum
 bins_pss <- c(0,14,26,40)
-
-# Classification test with PSS
 # Reproductibility
 set.seed(42)
 # CV
@@ -1236,7 +1268,7 @@ df_perf_cv_pss_items <- estimation_classification_cv(
 comparison_accuracy_null_model_classifier(df_perf_cv_pss_items)
 visualization_recall_precision(df_perf_cv_pss_items)
 
-# LORA - DH 
+# Classification test with DH
 df <- LORA_dh_items.r
 adversity_string <- "dh_sum"
 outcome_string <- "ghq_sum"
