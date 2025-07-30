@@ -115,6 +115,9 @@ variables_needed <- colnames(LORA)
 LORAr <- select_data(LORA, weeks_needed,variables_needed)
 
 ## Profiling - Cross-sectional LPA ####
+LORA_mplus <- LORAr[LORAr$t==1,c("PAS_content","PAS_process")]
+write.table(LORA_mplus, file = "LORAr.dat", row.names = FALSE, col.names = FALSE, sep = " ", quote = FALSE, na = ".")
+
 # LPA with baseline data
 LORAr %>%
   filter(t==1) %>%
