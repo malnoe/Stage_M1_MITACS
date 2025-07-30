@@ -997,6 +997,7 @@ visualization_recall_precision <- function(df_perf,list_groups){
 ## Application - LORA Data Prep ####
 
 # Get the data
+# Replace with your own path to the LORA dataframe
 df_LORA <- readRDS("C:/Users/garan/Documents/Ecole/M1/Stage/Internship_repo/Classification/Cross-sectional/ds_forJan.rds")
 
 # List all the interesting items/variables
