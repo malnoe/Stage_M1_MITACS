@@ -13,6 +13,7 @@ library(caret)  # CreateFolds, cross-validation
 
 
 ## Set-up and Rdata ####
+# Replace with the path to the LORA data on your computer
 original_df <- readRDS("C:/Users/garan/Documents/Ecole/M1/Stage/Internship_repo/Classification/Longitudinal/ds_forJan.rds")
 load("~/Ecole/M1/Stage/Internship_repo/Classification/Longitudinal/longitudinal_work_data.RData")
 
@@ -57,7 +58,6 @@ final_variables <- c("id","week","present","age","gender","pss_sum","ghq_sum","d
 df <- df[,final_variables]
 
 ## Participation diagnostic and selection of individuals ####
-
 # We build a dataframe with the number of participant each weeks and the number of
 # participants who partcipated all weeks until the considered week
 df_participation <- df %>%
@@ -121,7 +121,7 @@ for(adversity in c("pss_sum","dh_sum")){
       # Unadjusted linear model
       lm_unadjusted <- lm(as.formula(paste("ghq_sum", "~", adversity)), data = data_regression)
       
-      # Identification of influencial points using Cook's D.
+      # Identification of influencial points using Cook's D with the 4/n threshold
       used_data <- model.frame(lm_unadjusted)
       influencial_points <- which(cooks.distance(lm_unadjusted) > 4 / nrow(used_data))
       used_rows <- as.numeric(rownames(used_data))
@@ -138,14 +138,20 @@ for(adversity in c("pss_sum","dh_sum")){
         # Residuals of the adjusted linear model
         predicted_all <- predict(lm_adjusted, newdata = data_regression)
         residuals_all <- data_regression[["ghq_sum"]] - predicted_all
-        
-        # Put the residual in the result df
-        if(adversity=="pss_sum"){
-          d[index_present,"residuals_ghq_pss"] <- residuals_all
-        }
-        else{
-          d[index_present,"residuals_ghq_dh"] <- residuals_all
-        }
+      }
+      # If not
+      else{
+        # Residuals of the adjusted linear model
+        predicted_all <- predict(lm_unadjusted, newdata = data_regression)
+        residuals_all <- data_regression[["ghq_sum"]] - predicted_all
+      }
+      
+      # Put the residual in the result df
+      if(adversity=="pss_sum"){
+        d[index_present,"residuals_ghq_pss"] <- residuals_all
+      }
+      else{
+        d[index_present,"residuals_ghq_dh"] <- residuals_all
       }
     }
   }
@@ -189,9 +195,9 @@ pct_PIP_alpha_dh<- pct_PIP (alpha_dh,seq(from=0.5,to=1,by=0.05))# Classification
 summary(ranef_summary(alpha_dh, ci = 0.95, digits = 2)$PIP)# Distribution of PIP
 
 ## Functions - Visualization of the results ####
-
 # Function to visualize the variation of the size of classes depending on PIP threshold
 visualization_variation_size_classes <- function(pct_PIP_alpha,title){
+  # Pivot the dataframe to plot
   df_long <- pct_PIP_alpha %>%
     mutate(pct_average = 100 - pct_non_average) %>%
     pivot_longer(cols = c(pct_resilient, pct_non_resilient, pct_average),
@@ -202,6 +208,7 @@ visualization_variation_size_classes <- function(pct_PIP_alpha,title){
                                  "pct_non_resilient" = "Non-resilient",
                                  "pct_average" = "Average"))
   
+  # Plot
   plot <- ggplot(df_long, aes(x = PIP, y = percentage, color = group)) +
     geom_line(linewidth = 1.8) +
     geom_point(size=2) +
@@ -224,7 +231,7 @@ visualization_variation_size_classes <- function(pct_PIP_alpha,title){
   return(plot)
 }
 
-
+# Function to visualize all of the trajectories colored depending on the grouping based on a chosen threshold
 visualization_longitudinal <- function(df, ranef_summary, posterior_summary, PIP_threshold,type="PSS") {
   
   # Create table for random effects
@@ -251,85 +258,16 @@ visualization_longitudinal <- function(df, ranef_summary, posterior_summary, PIP
   # Get minimal effect sizes selected by spike-and-slab
   min_positive_theta <- min(ranef_df$Post.mean[ranef_df$PIP >= PIP_threshold & ranef_df$Post.mean > 0], na.rm = TRUE)
   max_negative_theta <- max(ranef_df$Post.mean[ranef_df$PIP >= PIP_threshold & ranef_df$Post.mean < 0], na.rm = TRUE)
-  
+ 
+  # Plot 
   if(type=="PSS"){
-    # Plot
-    ggplot(data = d_plot, aes(x = week, y = residuals_ghq_pss, group = id, color = class)) +
-      geom_line(alpha = 0.15) +
-      geom_point(size = 0.5, alpha = 0.7) +
-      
-      # Horizontal lines
-      geom_hline(yintercept = alpha, linetype = "dashed", color = "black", size = 0.6) +
-      geom_hline(yintercept = min_positive_theta, linetype = "dotted", color = "firebrick", size = 0.6) +
-      geom_hline(yintercept = max_negative_theta, linetype = "dotted", color = "steelblue", size = 0.6) +
-      
-      # Annotations for horizontal lines
-      annotate("text", x = Inf, y = alpha, label = paste0("Intercept (α = ", round(alpha, 2), ")"),
-               hjust = 1.1, vjust = -0.5, color = "black", size = 3) +
-      
-      annotate("text", x = Inf, y = min_positive_theta,
-               label = paste0("Min θ (non_resilient) = ", round(min_positive_theta, 2)),
-               hjust = 1.1, vjust = -0.5, color = "firebrick", size = 3) +
-      
-      annotate("text", x = Inf, y = max_negative_theta,
-               label = paste0("Max θ (resilient) = ", round(max_negative_theta, 2)),
-               hjust = 1.1, vjust = 1.5, color = "steelblue", size = 3) +
-      
-      scale_color_manual(values = c(
-        "Average" = "gray80",
-        "Resilient" = "steelblue",
-        "Non-resilient" = "firebrick"
-      )) +
-      
-      labs(
-        x = "Week",
-        y = "Residuals",
-        color = "Class",
-        title = "Residuals over time by individual",
-        subtitle = paste0("Colored only for PIP ≥ ", PIP_threshold)
-      ) +
-      theme_minimal() 
+    plot <- ggplot(data = d_plot, aes(x = week, y = residuals_ghq_pss, group = id, color = class)) 
   }
   else{
-    # Plot
-    ggplot(data = d_plot, aes(x = week, y = residuals_ghq_dh, group = id, color = class)) +
-      geom_line(alpha = 0.15) +
-      geom_point(size = 0.5, alpha = 0.7) +
-      
-      # Horizontal lines
-      geom_hline(yintercept = alpha, linetype = "dashed", color = "black", size = 0.6) +
-      geom_hline(yintercept = min_positive_theta, linetype = "dotted", color = "firebrick", size = 0.6) +
-      geom_hline(yintercept = max_negative_theta, linetype = "dotted", color = "steelblue", size = 0.6) +
-      
-      # Annotations for horizontal lines
-      annotate("text", x = Inf, y = alpha, label = paste0("Intercept (α = ", round(alpha, 2), ")"),
-               hjust = 1.1, vjust = -0.5, color = "black", size = 3) +
-      
-      annotate("text", x = Inf, y = min_positive_theta,
-               label = paste0("Min θ (non_resilient) = ", round(min_positive_theta, 2)),
-               hjust = 1.1, vjust = -0.5, color = "firebrick", size = 3) +
-      
-      annotate("text", x = Inf, y = max_negative_theta,
-               label = paste0("Max θ (resilient) = ", round(max_negative_theta, 2)),
-               hjust = 1.1, vjust = 1.5, color = "steelblue", size = 3) +
-      
-      scale_color_manual(values = c(
-        "Average" = "gray80",
-        "Resilient" = "steelblue",
-        "Non-resilient" = "firebrick"
-      )) +
-      
-      labs(
-        x = "Week",
-        y = "Residuals",
-        color = "Class",
-        title = "Residuals over time by individual",
-        subtitle = paste0("Colored only for PIP ≥ ", PIP_threshold)
-      ) +
-      theme_minimal()
+    plot <- plot + ggplot(data = d_plot, aes(x = week, y = residuals_ghq_dh, group = id, color = class)) 
   }
-  # Plot
-  ggplot(data = d_plot, aes(x = week, y = residuals_ghq_pss, group = id, color = class)) +
+  
+  plot <- plot +
     geom_line(alpha = 0.15) +
     geom_point(size = 0.5, alpha = 0.7) +
     
@@ -363,7 +301,9 @@ visualization_longitudinal <- function(df, ranef_summary, posterior_summary, PIP
       title = "Residuals over time by individual",
       subtitle = paste0("Colored only for PIP ≥ ", PIP_threshold)
     ) +
-    theme_minimal()
+    theme_minimal() 
+  
+  print(plot)
 }
 
 # Visualization of the main trajectories for one threshold with confidence intervals
@@ -859,27 +799,27 @@ classification_metrics <- function(true_labels, predicted_labels,levels=c("resil
   return(results)
 }
 
-# Function to apply VIF methodology
+# Function returning the predictors with low enough VIF
 remove_high_vif <- function(df, predictors, threshold = 5) {
-  # Garder seulement les variables non constantes
+  # Only keep the non-constent predictors
   non_constant <- predictors[sapply(df[, predictors, drop = FALSE], function(x) length(unique(x)) > 1)]
   
-  # Retirer les variables avec trop peu de niveaux uniques (ex : 1 ou 2 niveaux sur une variable censée être continue)
+  # Get rid of predictirs with 1 or 2 values only
   non_low_variance <- non_constant[sapply(df[, non_constant, drop = FALSE], function(x) length(unique(x)) > 3)]
   
+  # Verify with there are enough predictors left to compute the VIF
   if (length(non_low_variance) < 2) {
-    warning("Pas assez de variables valides pour calculer le VIF.")
+    warning("Not enough variables to compute the VIF.")
     return(non_low_variance)
   }
   
+  # Get the VIF
   df$fake_outcome <- 1
   f <- as.formula(paste("fake_outcome ~", paste(non_low_variance, collapse = " + ")))
   lm_fit <- lm(f, data = df)
   vif_values <- car::vif(lm_fit)
-  print("aa")
-  print(vif_values)
-  print("bbb")
   
+  # Result only VIF < threshold 
   kept_predictors <- names(vif_values)[vif_values < threshold]
   return(kept_predictors)
 }

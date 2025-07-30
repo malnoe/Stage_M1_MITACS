@@ -854,7 +854,7 @@ remove_high_vif <- function(df, predictors, threshold = 5) {
   
   # Verify with there are enough predictors left to compute the VIF
   if (length(non_low_variance) < 2) {
-    warning("Pas assez de variables valides pour calculer le VIF.")
+    warning("Not enough variables to compute the VIF.")
     return(non_low_variance)
   }
   
