@@ -8,6 +8,12 @@ library(kml3d) # Profiling
 library(rpart) # Regression tree
 library(tidyLPA) # Profiling LPA
 library(tidyr) # Dataframe managment 
+library(qgraph) # Plot the networks
+library(glmnet) # Network
+library(lavaan) # Network
+library(networktools) # Item selection
+library(tidyr)
+
 
 ## Get back to work ####
 load("~/Ecole/M1/Stage/Internship_repo/Network/Code/network_rdata.RData")
@@ -72,7 +78,7 @@ recode <- function(df,variables_to_recode,min,max){
 
 # Function to select the data and build the sums
 select_data <- function(df,list_week,variables_needed){
-  required_vars <- c(process_vars, content_vars)
+  required_vars <- c(process_vars, content_vars,paste0("ghq_",1:28))
   # Filter to weeks of interest
   df_week <- df %>% filter(t %in% weeks_needed)
   # Keep only individuals with no missing values on required variables
@@ -111,15 +117,27 @@ select_data <- function(df,list_week,variables_needed){
 
 # Define weeks and required variables
 weeks_needed <- c(1, 7, 13)
-variables_needed <- colnames(LORA)
+variables_needed <- c("t","id",process_vars,content_vars,paste0("ghq_",1:28))
 LORAr <- select_data(LORA, weeks_needed,variables_needed)
+
+# Scale
+LORAr_scale1 <- scale(LORAr[LORAr$t==1,-c(1,2)])
+LORAr_scale2 <- scale(LORAr[LORAr$t==7,-c(1,2)])
+LORAr_scale3 <- scale(LORAr[LORAr$t==13,-c(1,2)])
+LORAr_scale <- data.frame(rbind(LORAr_scale1,LORAr_scale2,LORAr_scale3))
+LORAr_scale$t <- LORAr$t
+LORAr_scale$id <- LORAr$id
+
+# Get the right variables for the network analysis
+LORA_network <- LORAr_scale[,c("id","t",paste0("ghq_",1:28))]
+
 
 ## Profiling - Cross-sectional LPA ####
 LORA_mplus <- LORAr[LORAr$t==1,c("PAS_content","PAS_process")]
 write.table(LORA_mplus, file = "LORAr.dat", row.names = FALSE, col.names = FALSE, sep = " ", quote = FALSE, na = ".")
 
 # LPA with baseline data
-LORAr %>%
+LORAr_scale %>%
   filter(t==1) %>%
   dplyr::select(PAS_content, PAS_process) %>%
   single_imputation() %>%
@@ -128,10 +146,9 @@ LORAr %>%
                     covariances = c("equal","zero","zero"),nrep = 5) %>%
   compare_solutions(statistics = c("AIC","BIC"))
 
-# Model 3 with 2 classes -> AIC=7296, BIC=7331
+# Model 3 with 2 classes best BIC, other lead to very small classes.
 
-# Plot best result for AIC, BIC and analytical process
-LORAr %>%
+LORAr_scale %>%
   filter(t==1) %>%
   dplyr::select(PAS_content, PAS_process) %>%
   single_imputation() %>%
@@ -140,11 +157,11 @@ LORAr %>%
                     covariances = c("equal"),nrep = 5) %>%
   plot_profiles()
 
-LPA_LORA_profiles <- LORAr %>%
+LPA_LORA_profiles <- LORAr_scale %>%
   filter(t==1) %>%
   dplyr::select(PAS_content, PAS_process) %>%
   single_imputation() %>%
-  estimate_profiles(3, 
+  estimate_profiles(2, 
                     variances = c("equal"),
                     covariances = c("equal"),nrep = 5)
 
@@ -153,8 +170,8 @@ LPA_LORA_profiles <- LORAr %>%
 
 
 ## Profiling - Cross-sectional Step function ####
-LORAr[["ghq_sum"]] <- rowSums(LORAr[,paste0("ghq_",1:28)],na.rm = TRUE)
-LORA_profiling <- LORAr %>%
+LORAr_scale[["ghq_sum"]] <- rowSums(LORAr_scale[,paste0("ghq_",1:28)],na.rm = TRUE)
+LORA_profiling <- LORAr_scale %>%
     dplyr::select(id,t,PAS_content, PAS_process,ghq_sum)
 LORA_profiling <- reshape(LORA_profiling,direction="wide",v.names=c("PAS_content","PAS_process","ghq_sum"),idvar="id",timevar="t")
 
@@ -297,7 +314,7 @@ rpart_cutoff(df=LORA_profiling,type="process")
 # Data Preparation
 cld3dPregTemp <- cld3d(LORA_profiling,timeInData=list(PAS_content=c(2,5,8),PAS_process=c(3,6,9)))
 # Building "optimal" clusteration
-kml3d(cld3dPregTemp,2:7,nbRedrawing=50,toPlot="nothing")
+kml3d(cld3dPregTemp,2:7,nbRedrawing=200,toPlot="nothing")
 choice(cld3dPregTemp)
 # Visualizing in 3D
 plotMeans3d(cld3dPregTemp,2)
@@ -310,31 +327,377 @@ plotMeans3d(cld3dPregTemp,7)
 
 ## Profiling - Longitudinal Content ####
 cldLORA_content <- cld(LORA_profiling,timeInData =c(2,5,8))
-kml(cldLORA_content,2:10,nbRedrawing = 15,toPlot="nothing")
+kml(cldLORA_content,2:10,nbRedrawing = 40,toPlot="nothing")
 plotAllCriterion(cldLORA_content)
 plot(cldLORA_content,2)
 plot(cldLORA_content,3)
 plot(cldLORA_content,4)
 plot(cldLORA_content,5)
-plot(cldLORA_content,6)
-plot(cldLORA_content,7)
 
 ## Profiling - Longitudinal Processes ####
 cldLORA_process <- cld(LORA_profiling,timeInData =c(3,6,9))
-kml(cldLORA_process,2:10,nbRedrawing = 15,toPlot="nothing")
+kml(cldLORA_process,2:10,nbRedrawing = 40,toPlot="nothing")
 plotAllCriterion(cldLORA_process)
 plot(cldLORA_process,2)
 plot(cldLORA_process,3)
 plot(cldLORA_process,4)
 plot(cldLORA_process,5)
-plot(cldLORA_process,6)
-plot(cldLORA_process,10)
 
-## Get clusters ####
-getClusters(cldLORA_content,2,asInteger = 1)
-getClusters(cldLORA_process,2,asInteger = 1)
-getClusters(cld3dPregTemp,2,asInteger = 1)
-LPA_LORA_profiles$model_3_class_2$dff$Class
+## Get clusters commands ####
+getClusters(cldLORA_content,4,asInteger = 1)
+getClusters(cldLORA_process,4,asInteger = 1)
+getClusters(cld3dPregTemp,4,asInteger = 1)
 
-## Network analysis ####
+## Functions - Load Functions for Network analysis ##########
 
+getAdjMatList <- function(designMat, data){
+  AdjMatList <- NULL
+  lambdaList <- NULL
+  k <- nrow(designMat)
+  
+  for (t in 1:(ncol(designMat) -1)){
+    
+    predictors <- as.matrix(data[, designMat[, t]])
+    
+    adjMat <- matrix(0, k, k)
+    colnames(adjMat) <- designMat[, (t+1)]
+    rownames(adjMat) <- colnames(predictors)
+    
+    lambdaVec <- rep(0,k)
+    
+    for (i in 1:k){
+      
+      set.seed(100)
+      lassoreg <- cv.glmnet(x = predictors, 
+                            y = data[, designMat[i , t+1 ]], 
+                            family = "gaussian", alpha = 1, standardize=TRUE)
+      
+      lambdaVec[i] <- lassoreg$lambda.min
+      
+      adjMat[1:k,i] <- coef(lassoreg, s = lambdaVec[i], exact = FALSE)[2:(k+1)]
+    }
+    
+    AdjMatList[[t]] <- adjMat
+    lambdaList[[t]] <- lambdaVec
+  }
+  return(list(B = AdjMatList, lambdas = lambdaList))
+}
+
+getLavaanSyntax <- function(designMat, model = NULL){
+  
+  k <- nrow(designMat)
+  
+  regressions <- ""
+  resVariances <- ""
+  
+  for (t in 1:(ncol(designMat) -1)){
+    
+    
+    for (i in 1:k){
+      
+      predictors <- designMat[, t]
+      
+      if(!is.null(model)){
+        
+        predictors <- predictors[which(model[[t]][,i] != 0 )]
+        
+      }
+      
+      #regress variable on variables at the previous time point
+      regressions <- paste(regressions, paste(designMat[i,(t+1)], "~", sep = ""), 
+                           paste(predictors, collapse = "+"), "\n")
+      
+      resVariances <- paste(resVariances, paste(designMat[i,(t+1)], "~~", paste(designMat[(i : k), (t+1)], collapse = "+"), sep = ""), "\n")
+    }
+  }
+  
+  
+  return(c(regressions, resVariances))
+}
+
+CreateSigB <- function(B, nonSigParam){
+  
+  sigB <- B
+  
+  if(nrow(nonSigParam) == 0){
+    return(B)
+  }else{
+    for(i in 1: nrow(nonSigParam)){
+      sigB[nonSigParam$rhs[i], nonSigParam$lhs[i]] <- 0
+      
+    }
+    
+    return(sigB)
+  }
+}
+
+CreateSeparateB <- function(B, designMat){
+  
+  BList <- NULL
+  
+  for (t in 1:(ncol(designMat) -1)){
+    
+    k <- nrow(designMat)
+    
+    outcomes <- designMat[, (t + 1)]
+    
+    predictors <- designMat[, t]
+    
+    BList[[t]] <- B[predictors, outcomes]
+    
+  }
+  
+  return(BList)
+}
+
+# This function takes a lavaan object and returns lavaan syntax for two nested
+# models (specifics about each model is described above).
+modelComparisonSyntax <- function(fit, designMat){
+  
+  B <- lavInspect(fit, what = 'std.all')$beta
+  
+  
+  
+  k <- nrow(designMat)
+  nwaves <- ncol(designMat)
+  ncoef <- k^2*(nwaves-1)
+  
+  ZeroesMat <- matrix(0, k^2, (nwaves-1))
+  
+  
+  # Create a matrix (separated by timepoint ) that tells us which where the 
+  # 0s are in the beta matrix
+  for(i in 1:(nwaves - 1)){
+    ZeroesMat[, i] <- as.vector(t(B)[designMat[,i], designMat[,(i+1)] ]) == 0
+  }
+  
+  #conservative list of zeroes (only if all are zero):
+  Zeroes.Cons <- apply(ZeroesMat, 1, sum) >= (nwaves - 1) #set to zero only if all (nwaves-1) paths are zero
+  
+  # Create a vector with information about constraints 
+  constraints <- rep(0, length(Zeroes.Cons))
+  nlabels <- length(which(Zeroes.Cons == FALSE))
+  paramLabels <- make.unique(rep(letters, length.out = nlabels), sep='')
+  
+  constraints[which(Zeroes.Cons == FALSE)] <- paramLabels
+  constraints[which(Zeroes.Cons == TRUE)] <- 0
+  
+  # Now let's create the lavaan syntax 
+  # Unconstrained Syntax
+  regressions <- ""
+  resVariances <- ""
+  
+  for (t in 1:(ncol(designMat) -1)){
+    
+    constraint.i <- 1
+    for (i in 1:k){
+      
+      predictors <- designMat[, t]
+      
+      #regress variable on variables at the previous time point
+      
+      syn <- rep(0, length(predictors))
+      
+      for(l in 1:length(predictors)){
+        
+        if(constraints[constraint.i] == "0"){
+          syn[l] <-  paste(constraints[constraint.i], "*", predictors[l])
+        }else{
+          
+          syn[l] <-  predictors[l]
+          
+        }
+        constraint.i <- constraint.i + 1
+      }
+      
+      regressions <- paste(regressions, paste(designMat[i,(t+1)], "~", sep = ""), 
+                           paste(syn, collapse = " + "), "\n")
+      
+      resVariances <- paste(resVariances, paste(designMat[i,(t+1)], "~~", paste(designMat[(i : k), (t+1)], collapse = "+"), sep = ""), "\n")
+    }
+  }
+  
+  unconsSyntax <- c(regressions, resVariances)
+  
+  # Constrained syntax
+  regressions <- ""
+  resVariances <- ""
+  
+  for (t in 1:(ncol(designMat) -1)){
+    
+    constraint.i <- 1
+    for (i in 1:k){
+      
+      predictors <- designMat[, t]
+      
+      #regress variable on variables at the previous time point
+      
+      syn <- rep(0, length(predictors))
+      
+      for(l in 1:length(predictors)){
+        syn[l] <-  paste(constraints[constraint.i], "*", predictors[l])
+        constraint.i <- constraint.i + 1
+      }
+      
+      regressions <- paste(regressions, paste(designMat[i,(t+1)], "~", sep = ""), 
+                           paste(syn, collapse = " + "), "\n")
+      
+      resVariances <- paste(resVariances, paste(designMat[i,(t+1)], "~~", paste(designMat[(i : k), (t+1)], collapse = "+"), sep = ""), "\n")
+    }
+  }
+  
+  consSyntax <- c(regressions, resVariances)
+  
+  return(list(UnconstrainedSyntax = unconsSyntax, ConstrainedSyntax = consSyntax))
+  
+}
+
+
+## Functions - Personal function to get the fit for the different groups ####
+network_analysis_groups <- function(designMat,data,groups){
+  list_fit_cons <- list()
+  list_fit_uncons <- list()
+  
+  # We verify that the number of individuals corresponds in the data and the given groups
+  if(length(groups)==nrow(data)){
+    n <- length(unique(groups))
+    # For each group, we build the 
+    for(i in 1:n){
+      print(paste0("Starting to work on group ",i," out of ",n,"."))
+      
+      # 0. Select the lines corresponding to the group
+      individuals <- groups==unique(groups)[i]
+      sub_data <- data[individuals,]
+      
+      # 1. Regularized Regression Step -> LASSO.
+      glmModel <- getAdjMatList(designMat = designMat, data = sub_data)
+      
+      # 2. Get the corresponding syntax
+      hybridlavaanSyntax_base <- getLavaanSyntax(designMat = designMat, model = glmModel$B)
+      model_lines <- unlist(strsplit(hybridlavaanSyntax_base, "\n"))
+      model_clean <- model_lines[!grepl("~\\s*$", model_lines)]
+      hybridlavaanSyntax <- paste(model_clean, collapse = "\n")
+      
+      # 3. Estimate SEM model
+      print("Estimating the base model")
+      hybridModel <- sem(model = hybridlavaanSyntax, data = sub_data, fixed.x = FALSE, missing = "FIML")
+      
+      # 4. Fix designMat
+      missing_items <- setdiff(as.vector(designMat), rownames(t(inspect(hybridModel, "std.all")$beta)))
+      designMat_clean <- designMat[
+        apply(designMat, 1, function(row) all(!row %in% missing_items)),
+      ]
+      
+      # 5. Comparison between unconstrained and constrained
+      comparisonSyntax <- modelComparisonSyntax(fit = hybridModel, designMat = designMat_clean)
+      
+      # 6. Fit both models
+      print("Estimating the constrained model")
+      fit.cons <- sem(comparisonSyntax$ConstrainedSyntax, data = sub_data, 
+                      missing = "FIML", fixed.x = F) 
+      print("Estimating the unconstrained model")
+      fit.uncons <- sem(comparisonSyntax$UnconstrainedSyntax, data = sub_data, 
+                        missing = "FIML", fixed.x = F) 
+      
+      # 7. Compare the models with Chi square test and other indicators
+      print(anova(fit.uncons, fit.cons)) 
+      
+      # 8. Save the fit in the list
+      list_fit_uncons[[i]] <- fit.uncons
+      list_fit_cons[[i]] <- fit.cons
+      
+    }
+    return(c(list_fit_cons,list_fit_uncons))
+  }
+  else{
+    print("The length of the group doesn't correspond to the data.")
+  }
+}
+
+## Network analysis - ITEMS - Choose Nodes and build design matrix ####
+# In this section we apply goldbricker to select which nodes to colides for
+# the network analysis on the items-level
+
+# 1. Apply Goldbricker on the whole dataset
+goldbricker(LORA_network[,-c(1,2)])
+# Res : ghq_16 & ghq_15, ghq_27 & ghq_25, ghq_28 & ghq_25, ghq_18 & ghq_17 
+
+# 2. Per time point
+goldbricker(LORA_network[LORA_network$t==1,-c(1,2)])
+goldbricker(LORA_network[LORA_network$t==7,-c(1,2)])
+goldbricker(LORA_network[LORA_network$t==13,-c(1,2)])
+# Res : 14&11 and 16&15
+
+# We choose to colide 14&11 and 16&15
+LORA_network_items <- LORA_network[,c("id","t",paste0("ghq_",c(1:10,12,13,17:28)))]
+LORA_network_items$ghq_1615 <- LORA_network$ghq_15+LORA_network$ghq_16/2
+LORA_network_items$ghq_1411 <- LORA_network$ghq_14+LORA_network$ghq_11/2
+
+
+# Build the wide dataframe
+LORA_wide_items <- LORA_network_items %>%
+  pivot_wider(
+    id_cols = id,
+    names_from = t,
+    values_from = starts_with("ghq_"),
+    names_sep = "."
+  )
+LORA_wide_items <- as.data.frame(LORA_wide_items[,-c(1)])
+
+# Design Matrix
+designMatItems <- matrix(colnames(LORA_wide_items),ncol=3,nrow=26,byrow=TRUE)
+
+
+
+## Network analysis - ITEMS - Results ####
+# KML3D
+networks_kml3D_2 <- network_analysis_groups(designMatItems,LORA_wide_items,getClusters(cld3dPregTemp,2,asInteger = 1))
+networks_kml3D_3 <- network_analysis_groups(designMatItems,LORA_wide_items,getClusters(cld3dPregTemp,3,asInteger = 1))
+networks_kml3D_4 <- network_analysis_groups(designMatItems,LORA_wide_items,getClusters(cld3dPregTemp,4,asInteger = 1))
+
+# KML Content
+networks_content_2 <- network_analysis_groups(designMatItems,LORA_wide_items,getClusters(cldLORA_content,2,asInteger = 1))
+networks_content_3 <-network_analysis_groups(designMatItems,LORA_wide_items,getClusters(cldLORA_content,3,asInteger = 1))
+networks_content_4 <-network_analysis_groups(designMatItems,LORA_wide_items,getClusters(cldLORA_content,4,asInteger = 1))
+
+# KML Process
+networks_process_2 <- network_analysis_groups(designMatItems,LORA_wide_items,getClusters(cldLORA_process,2,asInteger = 1))
+networks_process_3 <- network_analysis_groups(designMatItems,LORA_wide_items,getClusters(cldLORA_process,3,asInteger = 1))
+networks_process_4 <- network_analysis_groups(designMatItems,LORA_wide_items,getClusters(cldLORA_process,4,asInteger = 1))
+
+## Network analysis - SUBSCALES - Build subscale and design matrix ####
+LORA_network_subscale <- data.frame(id=LORA_network$id,t=LORA_network$t)
+LORA_network_subscale[["somatic"]] <- rowSums(LORA_network[,paste0("ghq_",1:7)],na.rm = TRUE)
+LORA_network_subscale[["anxiety"]] <- rowSums(LORA_network[,paste0("ghq_",8:14)],na.rm = TRUE)
+LORA_network_subscale[["social_dysfunction"]] <- rowSums(LORA_network[,paste0("ghq_",15:21)],na.rm = TRUE)
+LORA_network_subscale[["depression"]] <- rowSums(LORA_network[,paste0("ghq_",22:28)],na.rm = TRUE)
+
+LORA_wide_subscale <- LORA_network_subscale %>%
+  pivot_wider(
+    id_cols = id,
+    names_from = t,
+    values_from = c("somatic","anxiety","social_dysfunction","depression"),
+    names_sep = "."
+  )
+LORA_wide_subscale <- as.data.frame(LORA_wide_subscale[,-c(1)])
+
+# Design Matrix
+designMatSubscale <- matrix(colnames(LORA_wide_subscale),ncol=3,nrow=4,byrow=TRUE)
+
+
+
+## Network analysis - SUBSCALES - Results ####
+# KML3D
+networks_sub_kml3D_2 <- network_analysis_groups(designMatSubscale,LORA_wide_subscale,getClusters(cld3dPregTemp,2,asInteger = 1))
+networks_sub_kml3D_3 <- network_analysis_groups(designMatSubscale,LORA_wide_subscale,getClusters(cld3dPregTemp,3,asInteger = 1))
+networks_sub_kml3D_4 <- network_analysis_groups(designMatSubscale,LORA_wide_subscale,getClusters(cld3dPregTemp,4,asInteger = 1))
+
+# KML Content
+networks_sub_content_2 <- network_analysis_groups(designMatSubscale,LORA_wide_subscale,getClusters(cldLORA_content,2,asInteger = 1))
+networks_sub_content_3 <-network_analysis_groups(designMatSubscale,LORA_wide_subscale,getClusters(cldLORA_content,3,asInteger = 1))
+networks_sub_content_4 <-network_analysis_groups(designMatSubscale,LORA_wide_subscale,getClusters(cldLORA_content,4,asInteger = 1))
+
+# KML Process
+networks_sub_process_2 <- network_analysis_groups(designMatSubscale,LORA_wide_subscale,getClusters(cldLORA_process,2,asInteger = 1))
+networks_sub_process_3 <- network_analysis_groups(designMatSubscale,LORA_wide_subscale,getClusters(cldLORA_process,3,asInteger = 1))
+networks_sub_process_4 <- network_analysis_groups(designMatSubscale,LORA_wide_subscale,getClusters(cldLORA_process,4,asInteger = 1))
