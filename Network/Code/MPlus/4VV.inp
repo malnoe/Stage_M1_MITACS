@@ -1,4 +1,4 @@
-TITLE: LPA 2-class(varying variance and covariance);
+TITLE: LPA Class : 4 / Variance : Vary / Covariances : Vary
 
 DATA:
   FILE = LORAr.dat;
@@ -6,12 +6,12 @@ DATA:
 VARIABLE:
   NAMES = PAS_cont PAS_proc;
   USEVARIABLES = PAS_cont PAS_proc;
-  CLASSES = c(2);
+  CLASSES = c(4);
 
 ANALYSIS:
   TYPE = MIXTURE;
-  STARTS = 500 50;
-  STITERATIONS = 50;
+  STARTS = 500 100;
+  STITERATIONS = 100;
 
 MODEL:
   %c#1%
@@ -25,8 +25,4 @@ MODEL:
     PAS_cont WITH PAS_proc;
 
 OUTPUT:
-  TECH11 TECH14 SAMPSTAT;
-
-PLOT:
-  TYPE = PLOT3;
-  SERIES = PAS_cont (1) PAS_proc (2);
+  TECH11 TECH14;

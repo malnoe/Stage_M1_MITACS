@@ -1,0 +1,390 @@
+Mplus VERSION 8.11 DEMO
+MUTHEN & MUTHEN
+07/31/2025  11:15 AM
+
+INPUT INSTRUCTIONS
+
+  TITLE: LPA Class : 4 / Variance : Vary / Covariances : Zero
+
+  DATA:
+    FILE = LORAr.dat;
+
+  VARIABLE:
+    NAMES = PAS_cont PAS_proc;
+    USEVARIABLES = PAS_cont PAS_proc;
+    CLASSES = c(4);
+
+  ANALYSIS:
+    TYPE = MIXTURE;
+    STARTS = 500 50;
+    STITERATIONS = 50;
+
+  MODEL:
+    %c#1%
+      PAS_cont*;
+      PAS_proc*;
+
+    %c#2%
+      PAS_cont*;
+      PAS_proc*;
+
+  OUTPUT:
+    TECH11 TECH14;
+
+
+
+*** WARNING in MODEL command
+  All variables are uncorrelated with all other variables within class.
+  Check that this is what is intended.
+   1 WARNING(S) FOUND IN THE INPUT INSTRUCTIONS
+
+
+
+LPA Class : 4 / Variance : Vary / Covariances : Zero
+
+SUMMARY OF ANALYSIS
+
+Number of groups                                                 1
+Number of observations                                         622
+
+Number of dependent variables                                    2
+Number of independent variables                                  0
+Number of continuous latent variables                            0
+Number of categorical latent variables                           1
+
+Observed dependent variables
+
+  Continuous
+   PAS_CONT    PAS_PROC
+
+Categorical latent variables
+   C
+
+
+Estimator                                                      MLR
+Information matrix                                        OBSERVED
+Optimization Specifications for the Quasi-Newton Algorithm for
+Continuous Outcomes
+  Maximum number of iterations                                 100
+  Convergence criterion                                  0.100D-05
+Optimization Specifications for the EM Algorithm
+  Maximum number of iterations                                 500
+  Convergence criteria
+    Loglikelihood change                                 0.100D-06
+    Relative loglikelihood change                        0.100D-06
+    Derivative                                           0.100D-05
+Optimization Specifications for the M step of the EM Algorithm for
+Categorical Latent variables
+  Number of M step iterations                                    1
+  M step convergence criterion                           0.100D-05
+  Basis for M step termination                           ITERATION
+Optimization Specifications for the M step of the EM Algorithm for
+Censored, Binary or Ordered Categorical (Ordinal), Unordered
+Categorical (Nominal) and Count Outcomes
+  Number of M step iterations                                    1
+  M step convergence criterion                           0.100D-05
+  Basis for M step termination                           ITERATION
+  Maximum value for logit thresholds                            15
+  Minimum value for logit thresholds                           -15
+  Minimum expected cell size for chi-square              0.100D-01
+Optimization algorithm                                         EMA
+Random Starts Specifications
+  Number of initial stage random starts                        500
+  Number of final stage optimizations                           50
+  Number of initial stage iterations                            50
+  Initial stage convergence criterion                    0.100D+01
+  Random starts scale                                    0.500D+01
+  Random seed for generating random starts                       0
+
+Input data file(s)
+  LORAr.dat
+Input data format  FREE
+
+
+
+UNIVARIATE SAMPLE STATISTICS
+
+
+     UNIVARIATE HIGHER-ORDER MOMENT DESCRIPTIVE STATISTICS
+
+         Variable/         Mean/     Skewness/   Minimum/ % with                Percentiles
+        Sample Size      Variance    Kurtosis    Maximum  Min/Max      20%/60%    40%/80%    Median
+
+     PAS_CONT             43.423      -0.459      19.000    0.16%      38.000     42.000     44.000
+             622.000      40.109       0.178      56.000    0.64%      46.000     49.000
+     PAS_PROC             42.801      -0.614      27.000    0.16%      40.000     42.000     43.000
+             622.000      17.565       0.766      52.000    0.80%      44.000     46.000
+
+RANDOM STARTS RESULTS RANKED FROM THE BEST TO THE WORST LOGLIKELIHOOD VALUES
+
+Final stage loglikelihood values at local maxima, seeds, and initial stage start numbers:
+
+           -3629.843  422103           62
+           -3629.843  726035           191
+           -3629.843  392418           28
+           -3629.843  81117            305
+           -3629.843  783110           72
+           -3629.843  567165           319
+           -3629.843  794236           127
+           -3631.131  512836           289
+           -3631.208  891531           206
+           -3631.208  467339           66
+           -3631.208  53621            483
+           -3631.208  374219           353
+           -3631.208  509733           130
+           -3631.208  715561           125
+           -3631.599  576220           115
+           -3631.599  263268           165
+           -3631.685  220454           288
+           -3631.685  862607           468
+           -3631.685  769907           457
+           -3634.206  576596           99
+
+30 perturbed starting value run(s) did not converge or were rejected in the third stage.
+
+
+
+THE BEST LOGLIKELIHOOD VALUE HAS BEEN REPLICATED.  RERUN WITH AT LEAST TWICE THE
+RANDOM STARTS TO CHECK THAT THE BEST LOGLIKELIHOOD IS STILL OBTAINED AND REPLICATED.
+
+
+THE MODEL ESTIMATION TERMINATED NORMALLY
+
+
+
+MODEL FIT INFORMATION
+
+Number of Free Parameters                       17
+
+Loglikelihood
+
+          H0 Value                       -3629.843
+          H0 Scaling Correction Factor      0.9922
+            for MLR
+
+Information Criteria
+
+          Akaike (AIC)                    7293.686
+          Bayesian (BIC)                  7369.046
+          Sample-Size Adjusted BIC        7315.073
+            (n* = (n + 2) / 24)
+
+
+
+FINAL CLASS COUNTS AND PROPORTIONS FOR THE LATENT CLASSES
+BASED ON THE ESTIMATED MODEL
+
+    Latent
+   Classes
+
+       1         44.71427          0.07189
+       2        123.75185          0.19896
+       3        140.79479          0.22636
+       4        312.73909          0.50280
+
+
+FINAL CLASS COUNTS AND PROPORTIONS FOR THE LATENT CLASSES
+BASED ON ESTIMATED POSTERIOR PROBABILITIES
+
+    Latent
+   Classes
+
+       1         44.71427          0.07189
+       2        123.75185          0.19896
+       3        140.79479          0.22636
+       4        312.73909          0.50280
+
+
+FINAL CLASS COUNTS AND PROPORTIONS FOR THE LATENT CLASSES
+BASED ON THEIR MOST LIKELY LATENT CLASS MEMBERSHIP
+
+Class Counts and Proportions
+
+    Latent
+   Classes
+
+       1               35          0.05627
+       2              119          0.19132
+       3              140          0.22508
+       4              328          0.52733
+
+
+CLASSIFICATION QUALITY
+
+     Entropy                         0.645
+
+
+Average Latent Class Probabilities for Most Likely Latent Class Membership (Row)
+by Latent Class (Column)
+
+           1        2        3        4
+
+    1   0.896    0.000    0.100    0.004
+    2   0.000    0.806    0.000    0.194
+    3   0.091    0.000    0.724    0.185
+    4   0.002    0.085    0.110    0.804
+
+
+Classification Probabilities for the Most Likely Latent Class Membership (Column)
+by Latent Class (Row)
+
+           1        2        3        4
+
+    1   0.702    0.000    0.286    0.013
+    2   0.000    0.775    0.000    0.225
+    3   0.025    0.000    0.720    0.255
+    4   0.000    0.074    0.083    0.843
+
+
+Logits for the Classification Probabilities for the Most Likely Latent Class Membership (Column)
+by Latent Class (Row)
+
+              1        2        3        4
+
+    1      4.002   -7.076    3.103    0.000
+    2    -12.325    1.236  -10.475    0.000
+    3     -2.326   -6.846    1.037    0.000
+    4     -7.662   -2.436   -2.320    0.000
+
+
+MODEL RESULTS
+
+                                                    Two-Tailed
+                    Estimate       S.E.  Est./S.E.    P-Value
+
+Latent Class 1
+
+ Means
+    PAS_CONT          32.558      1.347     24.166      0.000
+    PAS_PROC          34.534      1.099     31.429      0.000
+
+ Variances
+    PAS_CONT          30.806      9.763      3.155      0.002
+    PAS_PROC          13.891      3.253      4.271      0.000
+
+Latent Class 2
+
+ Means
+    PAS_CONT          50.430      0.813     62.018      0.000
+    PAS_PROC          47.223      0.539     87.587      0.000
+
+ Variances
+    PAS_CONT           8.919      1.981      4.503      0.000
+    PAS_PROC           5.037      1.107      4.552      0.000
+
+Latent Class 3
+
+ Means
+    PAS_CONT          38.276      1.145     33.427      0.000
+    PAS_PROC          40.176      0.752     53.432      0.000
+
+ Variances
+    PAS_CONT          15.447      2.806      5.504      0.000
+    PAS_PROC           6.874      1.064      6.458      0.000
+
+Latent Class 4
+
+ Means
+    PAS_CONT          44.520      0.967     46.023      0.000
+    PAS_PROC          43.414      0.522     83.176      0.000
+
+ Variances
+    PAS_CONT          15.447      2.806      5.504      0.000
+    PAS_PROC           6.874      1.064      6.458      0.000
+
+Categorical Latent Variables
+
+ Means
+    C#1               -1.945      0.350     -5.561      0.000
+    C#2               -0.927      0.335     -2.766      0.006
+    C#3               -0.798      0.353     -2.263      0.024
+
+
+QUALITY OF NUMERICAL RESULTS
+
+     Condition Number for the Information Matrix              0.676E-04
+       (ratio of smallest to largest eigenvalue)
+
+
+TECHNICAL 11 OUTPUT
+
+     Random Starts Specifications for the k-1 Class Analysis Model
+        Number of initial stage random starts                 500
+        Number of final stage optimizations                    50
+
+
+
+     VUONG-LO-MENDELL-RUBIN LIKELIHOOD RATIO TEST FOR 3 (H0) VERSUS 4 CLASSES
+
+          H0 Loglikelihood Value                        -3641.027
+          2 Times the Loglikelihood Difference             22.369
+          Difference in the Number of Parameters                5
+          Mean                                              0.447
+          Standard Deviation                                9.250
+          P-Value                                          0.0049
+
+     LO-MENDELL-RUBIN ADJUSTED LRT TEST
+
+          Value                                            21.694
+          P-Value                                          0.0058
+
+
+TECHNICAL 14 OUTPUT
+
+     Random Starts Specifications for the k-1 Class Analysis Model
+        Number of initial stage random starts                 500
+        Number of final stage optimizations                    50
+
+     Random Starts Specification for the k-1 Class Model for Generated Data
+        Number of initial stage random starts                   0
+        Number of final stage optimizations for the
+           initial stage random starts                          0
+     Random Starts Specification for the k Class Model for Generated Data
+        Number of initial stage random starts                  40
+        Number of final stage optimizations                     8
+     Number of bootstrap draws requested                   Varies
+
+
+     PARAMETRIC BOOTSTRAPPED LIKELIHOOD RATIO TEST FOR 3 (H0) VERSUS 4 CLASSES
+
+          H0 Loglikelihood Value                        -3641.027
+          2 Times the Loglikelihood Difference             22.369
+          Difference in the Number of Parameters                5
+          Approximate P-Value                              0.0500
+          Successful Bootstrap Draws                          100
+
+     WARNING:  OF THE 100 BOOTSTRAP DRAWS, 59 DRAWS HAD BOTH A SMALLER LRT VALUE THAN THE
+     OBSERVED LRT VALUE AND NOT A REPLICATED BEST LOGLIKELIHOOD VALUE FOR THE 4-CLASS MODEL.
+     THIS MEANS THAT THE P-VALUE MAY NOT BE TRUSTWORTHY DUE TO LOCAL MAXIMA.
+     INCREASE THE NUMBER OF RANDOM STARTS USING THE LRTSTARTS OPTION.
+
+
+
+DIAGRAM INFORMATION
+
+  Mplus diagrams are currently not available for Mixture analysis.
+  No diagram output was produced.
+
+
+     Beginning Time:  11:15:57
+        Ending Time:  11:16:23
+       Elapsed Time:  00:00:26
+
+
+Mplus VERSION 8.11 DEMO has the following limitations:
+  Maximum number of dependent variables: 6
+  Maximum number of independent variables: 2
+  Maximum number of between variables: 2
+  Maximum number of continuous latent variables in time series analysis: 2
+
+
+MUTHEN & MUTHEN
+3463 Stoner Ave.
+Los Angeles, CA  90066
+
+Tel: (310) 391-9971
+Fax: (310) 391-8971
+Web: www.StatModel.com
+Support: Support@StatModel.com
+
+Copyright (c) 1998-2024 Muthen & Muthen

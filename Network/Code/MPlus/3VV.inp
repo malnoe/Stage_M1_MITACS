@@ -1,0 +1,28 @@
+TITLE: LPA Class : 3 / Variance : Vary / Covariances : Vary
+
+DATA:
+  FILE = LORAr.dat;
+
+VARIABLE:
+  NAMES = PAS_cont PAS_proc;
+  USEVARIABLES = PAS_cont PAS_proc;
+  CLASSES = c(3);
+
+ANALYSIS:
+  TYPE = MIXTURE;
+  STARTS = 500 50;
+  STITERATIONS = 50;
+
+MODEL:
+  %c#1%
+    PAS_cont*;
+    PAS_proc*;
+    PAS_cont WITH PAS_proc;
+
+  %c#2%
+    PAS_cont*;
+    PAS_proc*;
+    PAS_cont WITH PAS_proc;
+
+OUTPUT:
+  TECH11 TECH14;
