@@ -167,8 +167,7 @@ InOutPredict <- function(data, B, designMat, groups){
 
 # This function bootstraps the data and calculates prediction metrics from each of the 
 # bootstrapped datasets
-bootstrapPredictionMetrics <- function(model, designMat, groups, samples = 10,
-                                       parallel = "no"){
+bootstrapPredictionMetrics <- function(model, designMat, groups, samples = 10, parallel = "no"){
   
   # Bootstrap a lavaan model
   # Save the beta matrix from each sample
@@ -224,9 +223,9 @@ bootstrapPredictionMetrics <- function(model, designMat, groups, samples = 10,
 
 ### Load model fit and data ##################
 # Load model/fit object you would like to calculate prediction metrics for
-load(file = "C:/Users/annawy/Box/Research/Davis/In Progress/CLPN/R/Applied Example Code/Fit Objects/modelComparisons.Rdata") # loads object modelComparisonFits
+#load(file = "C:/Users/annawy/Box/Research/Davis/In Progress/CLPN/R/Applied Example Code/Fit Objects/modelComparisons.Rdata") # loads object modelComparisonFits
 
-load(file = "C:/Users/annawy/Box/Research/Davis/In Progress/CLPN/Data/EmpiricalExampleData.Rda") # loads object mydata and object mylegend
+#load(file = "C:/Users/annawy/Box/Research/Davis/In Progress/CLPN/Data/EmpiricalExampleData.Rda") # loads object mydata and object mylegend
 
 
 
