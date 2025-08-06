@@ -423,6 +423,7 @@ CreateSigB <- function(B, nonSigParam){
     return(B)
   }else{
     for(i in 1: nrow(nonSigParam)){
+
       sigB[nonSigParam$rhs[i], nonSigParam$lhs[i]] <- 0
       
     }
@@ -455,8 +456,6 @@ CreateSeparateB <- function(B, designMat){
 modelComparisonSyntax <- function(fit, designMat){
   
   B <- lavInspect(fit, what = 'std.all')$beta
-  
-  
   
   k <- nrow(designMat)
   nwaves <- ncol(designMat)
@@ -554,7 +553,7 @@ modelComparisonSyntax <- function(fit, designMat){
 
 
 ## Functions - Personal function to get the fit for the different groups ####
-network_analysis_groups <- function(designMat,data,groups){
+network_analysis_groups <- function(designMat,data,groups,subscale=FALSE){
   list_fit_cons <- list()
   list_fit_uncons <- list()
   
@@ -585,10 +584,9 @@ network_analysis_groups <- function(designMat,data,groups){
       # 4. Fix designMat
       missing_items <- setdiff(as.vector(designMat), rownames(t(inspect(hybridModel, "std.all")$beta)))
       designMat_clean <- designMat[
-        apply(designMat, 1, function(row) all(!row %in% missing_items)),
-      ]
-      
+          apply(designMat, 1, function(row) all(!row %in% missing_items)),]
       # 5. Comparison between unconstrained and constrained
+      print("Start comparison syntax")
       comparisonSyntax <- modelComparisonSyntax(fit = hybridModel, designMat = designMat_clean)
       
       # 6. Fit both models
@@ -607,11 +605,38 @@ network_analysis_groups <- function(designMat,data,groups){
       list_fit_cons[[i]] <- fit.cons
       
     }
-    return(c(list_fit_cons,list_fit_uncons))
+    return(list(cons=list_fit_cons,uncons=list_fit_uncons))
   }
   else{
     print("The length of the group doesn't correspond to the data.")
   }
+}
+
+get_final_matrix <- function(model,designMat,pvalue=0.05){
+  allRegressions <- parameterestimates(model,  standardized = TRUE)[grep("~~", parameterestimates(model)$op, invert = TRUE),]
+  allRegressions <- allRegressions[which(allRegressions$op != "~1"),]
+  
+  # Initialize to 0
+  row_vars <- unique(designMat[, 1])
+  col_vars <- unique(designMat[, 2])
+  result_mat <- matrix(0, nrow = length(row_vars), ncol = length(col_vars),
+                       dimnames = list(row_vars, col_vars))
+  
+  # Loop on designMatItems
+  for(i in 1:nrow(designMat)) {
+    rhs_var <- designMat[i, 1]
+    lhs_var <- designMat[i, 2]
+    
+    # Look for corresponding line in allRegressions
+    match_row <- allRegressions %>%
+      filter(lhs == lhs_var, rhs == rhs_var, pvalue <= pvalue, est != 0)
+    
+    # And add it to the matrix
+    if(nrow(match_row) == 1) {
+      result_mat[rhs_var, lhs_var] <- match_row$est
+    }
+  }
+  return(result_mat)
 }
 
 ## Network analysis - ITEMS - Choose Nodes and build design matrix ####
@@ -652,18 +677,29 @@ designMatItems <- matrix(colnames(LORA_wide_items),ncol=3,nrow=26,byrow=TRUE)
 ## Network analysis - ITEMS - Results ####
 # KML3D
 networks_kml3D_2 <- network_analysis_groups(designMatItems,LORA_wide_items,getClusters(cld3dPregTemp,2,asInteger = 1))
-networks_kml3D_3 <- network_analysis_groups(designMatItems,LORA_wide_items,getClusters(cld3dPregTemp,3,asInteger = 1))
-networks_kml3D_4 <- network_analysis_groups(designMatItems,LORA_wide_items,getClusters(cld3dPregTemp,4,asInteger = 1))
 
 # KML Content
 networks_content_2 <- network_analysis_groups(designMatItems,LORA_wide_items,getClusters(cldLORA_content,2,asInteger = 1))
 networks_content_3 <-network_analysis_groups(designMatItems,LORA_wide_items,getClusters(cldLORA_content,3,asInteger = 1))
-networks_content_4 <-network_analysis_groups(designMatItems,LORA_wide_items,getClusters(cldLORA_content,4,asInteger = 1))
 
 # KML Process
 networks_process_2 <- network_analysis_groups(designMatItems,LORA_wide_items,getClusters(cldLORA_process,2,asInteger = 1))
 networks_process_3 <- network_analysis_groups(designMatItems,LORA_wide_items,getClusters(cldLORA_process,3,asInteger = 1))
-networks_process_4 <- network_analysis_groups(designMatItems,LORA_wide_items,getClusters(cldLORA_process,4,asInteger = 1))
+
+# Get the final matrix ?
+model <- networks_kml3D_2$cons[[1]]
+model <- networks_kml3D_2$cons[[2]]
+
+model <- networks_content_2$cons[[1]]
+model <- networks_content_2$cons[[2]]
+
+model <- networks_process_2$cons[[1]]
+model <- networks_process_2$cons[[2]]
+
+
+sum(get_final_matrix(model,designMatItems)!=0)
+qgraph(get_final_matrix(model,designMatItems))
+
 
 ## Network analysis - SUBSCALES - Build subscale and design matrix ####
 LORA_network_subscale <- data.frame(id=LORA_network$id,t=LORA_network$t)
@@ -684,20 +720,24 @@ LORA_wide_subscale <- as.data.frame(LORA_wide_subscale[,-c(1)])
 # Design Matrix
 designMatSubscale <- matrix(colnames(LORA_wide_subscale),ncol=3,nrow=4,byrow=TRUE)
 
-
-
 ## Network analysis - SUBSCALES - Results ####
-# KML3D
-networks_sub_kml3D_2 <- network_analysis_groups(designMatSubscale,LORA_wide_subscale,getClusters(cld3dPregTemp,2,asInteger = 1))
-networks_sub_kml3D_3 <- network_analysis_groups(designMatSubscale,LORA_wide_subscale,getClusters(cld3dPregTemp,3,asInteger = 1))
-networks_sub_kml3D_4 <- network_analysis_groups(designMatSubscale,LORA_wide_subscale,getClusters(cld3dPregTemp,4,asInteger = 1))
+data <- LORA_wide_subscale
+groups <- getClusters(cldLORA_process,2,asInteger = 1)
+i <- 2
+designMat <- designMatSubscale
 
-# KML Content
-networks_sub_content_2 <- network_analysis_groups(designMatSubscale,LORA_wide_subscale,getClusters(cldLORA_content,2,asInteger = 1))
-networks_sub_content_3 <-network_analysis_groups(designMatSubscale,LORA_wide_subscale,getClusters(cldLORA_content,3,asInteger = 1))
-networks_sub_content_4 <-network_analysis_groups(designMatSubscale,LORA_wide_subscale,getClusters(cldLORA_content,4,asInteger = 1))
+individuals <- groups==unique(groups)[i]
+sub_data <- data[individuals,]
 
-# KML Process
-networks_sub_process_2 <- network_analysis_groups(designMatSubscale,LORA_wide_subscale,getClusters(cldLORA_process,2,asInteger = 1))
-networks_sub_process_3 <- network_analysis_groups(designMatSubscale,LORA_wide_subscale,getClusters(cldLORA_process,3,asInteger = 1))
-networks_sub_process_4 <- network_analysis_groups(designMatSubscale,LORA_wide_subscale,getClusters(cldLORA_process,4,asInteger = 1))
+# 1. Regularized Regression Step -> LASSO.
+glmModel <- getAdjMatList(designMat = designMat, data = sub_data)
+
+# 2. Get the corresponding syntax
+hybridlavaanSyntax_base <- getLavaanSyntax(designMat = designMat, model = glmModel$B)
+model_lines <- unlist(strsplit(hybridlavaanSyntax_base, "\n"))
+model_clean <- model_lines[!grepl("~\\s*$", model_lines)]
+hybridlavaanSyntax <- paste(model_clean, collapse = "\n")
+
+# 3. Estimate SEM model
+hybridModel <- sem(model = hybridlavaanSyntax, data = sub_data, fixed.x = FALSE, missing = "FIML")
+qgraph(get_final_matrix(hybridModel,designMat))

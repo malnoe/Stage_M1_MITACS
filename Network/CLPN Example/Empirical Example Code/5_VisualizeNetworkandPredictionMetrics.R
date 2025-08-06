@@ -66,4 +66,4 @@ par(mar = rep(0, 4))
 legend(x = "center", inset = c(0, 0), bty = "n", legend = mylegend,  
        col = c(rep("#E69F00",7),rep("#56B4E9",10)), y.intersp = 1,
        pch = 19, cex = 1.8) #add legend to identify variables
-dev.off() #(uncomment this code to save plot as jpeg)
+#dev.off() #(uncomment this code to save plot as jpeg)
