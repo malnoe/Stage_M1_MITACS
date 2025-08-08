@@ -24,6 +24,7 @@ library(lavaan)
 #   "DS9:  Wave B 1990: Child Survey Data"
 
 setwd("~/Ecole/M1/Stage/Internship_repo/Network/CLPN Example/Empirical Example Code") #set working directory to location of data files
+load("~/Ecole/M1/Stage/Internship_repo/Network/CLPN Example/Empirical Example Code/data.RData")
 W1child <- read.table(file = "WaveAChild/26721-0003-Data.tsv", sep = "\t", header = TRUE)
 W2child <- read.table(file = "WaveBChild/26721-0009-Data.tsv", sep = "\t", header = TRUE)
 W3child <- read.table(file = "WaveCChild/26721-0016-Data.tsv", sep = "\t", header = TRUE)
